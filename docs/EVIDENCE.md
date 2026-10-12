@@ -1,6 +1,6 @@
 # Engineering evidence index
 
-Implementation and executed verification are separated. Exact final run IDs/counts/screenshots will be recorded from inspected output before reporting the PR ready.
+Implementation and executed verification are separated. The links below identify executed checks, authentic visual captures, and their exact source files.
 
 | Claim                                                                 | Source                                                                                                           | Executable proof                                                                                   |
 | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -17,21 +17,21 @@ Implementation and executed verification are separated. Exact final run IDs/coun
 
 ## Executed verification
 
-- **Native PostgreSQL CI:** [run 38285412731](https://github.com/naraya07pedro-spec/fullstack-ai-operations-console/actions/runs/38285412731), reviewed PR head `4e2c63c13689845ee71e8a4e75f721bf16d72978`. All workflow steps passed, including **55/55 unit/API/database/authorization/reliability tests and 10/10 desktop/mobile browser cases**, production frontend build, dependency/secret checks, evidence fingerprints, and review-source packaging. This executed the native database constraint-error case that the local bridge cannot relay.
+- **Native PostgreSQL CI:** [run 38287930268](https://github.com/naraya07pedro-spec/fullstack-ai-operations-console/actions/runs/38287930268), reviewed PR head `c0d83f0107d9ead0777a4fbd31e4e9a8c767e99b`. All workflow steps passed, including **55/55 unit/API/database/authorization/reliability tests and 10/10 desktop/mobile browser cases**, production frontend build, dependency/secret checks, evidence fingerprints, and review-source packaging. This executed the native database constraint-error case that the local bridge cannot relay.
 - **Local PostgreSQL WASM fallback:** [VERIFICATION.json](VERIFICATION.json) contains **54 passed, 0 failed, 1 explicitly native-only skipped**; **10/10 browser cases passed without retries/flakes**. It records the selected API/contracts coverage, source SHA-256 fingerprints, and hashes/dimensions of all 16 screenshots.
 - **Coverage scope:** API/auth/config/engine/errors/sandbox and shared contracts only; frontend and process launchers are excluded. Latest inspected local report: 95.87% statements, 92.92% branches, 96.42% functions, 98.03% lines. The CI artifact contains its independently generated report.
 - **Security checks:** npm advisory response reported 0 vulnerabilities across all installed dependencies. Known-pattern scan passed. HTTP/API negative cases executed for wrong/expired/revoked/forged sessions, role/owner isolation, Origin/CSRF, invalid/oversized input, redirects, response validation, and integration authentication. These are bounded verification claims, not a penetration-test certification.
 - **Reliability outcomes:** eight simultaneous admissions produced one run; racing decisions produced one outcome; approval rejection sent zero integration requests; real HTTP 503 retried successfully; timeout exhausted its configured two attempts; HTTP 422 stopped after one attempt; manual recovery retained the same run ID; a real worker SIGKILL was followed by lease recovery and successful replay with one sandbox ticket; stale ownership could not commit. Named cases and outputs are in `tests/integration/system.test.ts` and the CI test-report artifact.
 
-The branch also includes the global status-filter browser regression added after the above run. The final checked run is linked in the PR and recorded here after inspection.
+The inspected run includes global status filtering, stable cursor pages during polling, mobile sign-out, keyboard focus, reduced motion, and escaped hostile input. A clean build removes stale generated output before compilation.
 
 ## Authentic visual proof and recording
 
-[Selected screenshot gallery](screenshots/README.md) links dashboard, configuration, history, waiting approval, successful output, failure, recovery, and rejection in desktop/mobile views. All 16 browser PNGs were visually inspected; their exact hashes and dimensions are in [VERIFICATION.json](VERIFICATION.json). Counts and messages come from synthetic persisted test records.
+[Selected screenshot gallery](screenshots/README.md) links dashboard, configuration, history, waiting approval, successful output, failure, recovery, and rejection in desktop/mobile views. Required states are asserted by browser tests. Desktop/mobile layouts and approval/failure/recovery frames were visually inspected; all 16 PNG hashes and dimensions are validated in [VERIFICATION.json](VERIFICATION.json). Counts and messages come from synthetic persisted test records.
 
 The complete desktop walkthrough was recorded directly from the running application and inspected with FFprobe: **19.04 seconds, 1440 × 1000, VP9** for the local capture. It covers sign-in, workflow configuration, approval, integration output, execution history, actual 503 failure, recovery, rejection, and dashboard outcomes. CI produces its own independent recordings.
 
-[CI evidence artifact](https://github.com/naraya07pedro-spec/fullstack-ai-operations-console/actions/runs/38285412731/artifacts/11763127772) contains:
+[CI evidence artifact](https://github.com/naraya07pedro-spec/fullstack-ai-operations-console/actions/runs/38287930268/artifacts/11763593752) contains:
 
 | Artifact path                                                                                           | Evidence                                             |
 | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
