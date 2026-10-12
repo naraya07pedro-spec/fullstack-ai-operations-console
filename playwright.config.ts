@@ -6,7 +6,7 @@ const browserEnv=process.env.BROWSER_LIB_DIR?{...process.env,FONTCONFIG_PATH:res
 export default defineConfig({
   testDir:'tests/e2e',fullyParallel:false,workers:1,retries:0,timeout:60000,
   expect:{timeout:15000},reporter:[['list'],['html',{outputFolder:'playwright-report',open:'never'}],['json',{outputFile:'artifacts/e2e-results.json'}]],
-  use:{baseURL:'http://localhost:3000',trace:'on',video:'on',screenshot:'only-on-failure',launchOptions:fallback?{executablePath:fallback,args:chromium.args,env:browserEnv}:{}},
+  use:{baseURL:'http://localhost:3000',trace:'on',video:'on',screenshot:'only-on-failure',launchOptions:fallback?{executablePath:fallback,args:chromium.args.filter(a=>!['--disable-web-security','--allow-running-insecure-content'].includes(a)),env:browserEnv}:{}},
   projects:[{name:'desktop-chromium',use:{...devices['Desktop Chrome'],viewport:{width:1440,height:1000}}},{name:'mobile-chromium',use:{...devices['Pixel 7'],viewport:{width:390,height:844}}}],
   webServer:[
     {command:'npm run dev:api',url:'http://127.0.0.1:4000/health',reuseExistingServer:false,timeout:60000},

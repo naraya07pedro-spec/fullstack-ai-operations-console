@@ -1,4 +1,4 @@
-import { beforeAll,beforeEach,afterAll,describe,it,expect } from 'vitest';
+import { beforeAll,beforeEach,afterEach,afterAll,describe,it,expect } from 'vitest';
 import { PrismaClient, Prisma } from '@prisma/client';
 import Fastify from 'fastify';
 import { spawn } from 'node:child_process';
@@ -31,6 +31,7 @@ beforeEach(async()=>{
  owner=a.id;other=b.id;viewer=v.id;
 });
 afterAll(async()=>{await app?.close();await sandbox?.app.close();await db.$disconnect();});
+afterEach(async()=>{await db.$disconnect();});
 
 describe('authentication and authorization through the API',()=>{
  it('connects to the real database and rejects unauthenticated access',async()=>{expect((await app.inject('/health')).json()).toMatchObject({database:'connected'});for(const url of ['/v1/workflows','/v1/runs','/v1/dashboard','/v1/auth/me'])expect((await app.inject(url)).statusCode).toBe(401);});
@@ -56,7 +57,15 @@ describe('workflow CRUD, API admission, and database invariants',()=>{
  it('separates different owners using the same idempotency key',async()=>{const a=await workflow(),b=await workflow({},other);const results=await Promise.all([admitRun(db,owner,a.id,'same-owner-scoped-key',{message:'Owner request'}),admitRun(db,other,b.id,'same-owner-scoped-key',{message:'Other request'})]);expect(results[0].run.id).not.toBe(results[1].run.id);});
  it('rejects malformed IDs, query injection, invalid pagination, and missing idempotency keys',async()=>{const h=await login(),w=await workflow();for(const url of ['/v1/runs/not-a-uuid','/v1/runs?limit=1000','/v1/runs?status=DROP_TABLE','/v1/runs?unknown=value'])expect((await app.inject({url,headers:h})).statusCode).toBe(400);expect((await app.inject({method:'POST',url:`/v1/workflows/${w.id}/runs`,headers:h,payload:{message:'Missing key'}})).statusCode).toBe(400);});
  it('paginates stable run records and exposes attempt and event history',async()=>{const h=await login(),a=await run(),b=await run();const first=(await app.inject({url:'/v1/runs?limit=1',headers:h})).json();expect(first.items).toHaveLength(1);expect(first.nextCursor).toBeTruthy();const second=(await app.inject({url:`/v1/runs?limit=1&cursor=${first.nextCursor}`,headers:h})).json();expect(second.items[0].id).not.toBe(first.items[0].id);expect(new Set([first.items[0].id,second.items[0].id])).toEqual(new Set([a.id,b.id]));await drain(a.id);const detail=(await app.inject({url:`/v1/runs/${a.id}`,headers:h})).json();expect(detail.attempts).toHaveLength(1);expect(detail.events.some((e:{type:string})=>e.type==='RUN_SUCCEEDED')).toBe(true);});
- it('enforces foreign keys, limits, successful-output and lease invariants inside PostgreSQL',async()=>{await expect(db.workflow.create({data:{...workflowSchema.parse({name:'Foreign key test'}),ownerId:crypto.randomUUID()}})).rejects.toBeDefined();await expect(db.workflow.create({data:{...workflowSchema.parse({name:'Invalid DB limit'}),maxAttempts:9,ownerId:owner}})).rejects.toBeDefined();const r=await run();await expect(db.run.update({where:{id:r.id},data:{status:'SUCCEEDED'}})).rejects.toBeDefined();await expect(db.run.update({where:{id:r.id},data:{status:'RUNNING'}})).rejects.toBeDefined();expect((await db.run.findUniqueOrThrow({where:{id:r.id}})).status).toBe('QUEUED');});
+ it('enforces foreign keys, limits, successful-output and lease invariants inside PostgreSQL',async()=>{
+  async function constraint(operation:()=>Promise<unknown>,pattern:RegExp){await expect(operation()).rejects.toThrow(pattern);await db.$disconnect();}
+  await constraint(()=>db.workflow.create({data:{...workflowSchema.parse({name:'Foreign key test'}),ownerId:crypto.randomUUID()}}),/foreign key constraint/i);
+  await constraint(()=>db.workflow.create({data:{...workflowSchema.parse({name:'Invalid DB limit'}),maxAttempts:9,ownerId:owner}}),/check constraint|CheckConstraintViolation/i);
+  const r=await run();
+  await constraint(()=>db.run.update({where:{id:r.id},data:{status:'SUCCEEDED'}}),/check constraint|CheckConstraintViolation/i);
+  await constraint(()=>db.run.update({where:{id:r.id},data:{status:'RUNNING'}}),/check constraint|CheckConstraintViolation/i);
+  expect((await db.run.findUniqueOrThrow({where:{id:r.id}})).status).toBe('QUEUED');
+ });
  it('rolls back a transaction when a later database operation fails',async()=>{const count=await db.workflow.count();await expect(db.$transaction(async tx=>{await tx.workflow.create({data:{...workflowSchema.parse({name:'Rollback fixture'}),ownerId:owner}});await tx.runEvent.create({data:{runId:crypto.randomUUID(),type:'INVALID',detail:{}}});})).rejects.toBeDefined();expect(await db.workflow.count()).toBe(count);});
 });
 describe('approval, reliability, and real HTTP sandbox integration',()=>{

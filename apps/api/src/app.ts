@@ -16,7 +16,7 @@ export async function buildApp(db:PrismaClient, options:{logging?:boolean;rateLi
   const app=Fastify({bodyLimit:16384,requestTimeout:15000,logger:options.logging?{redact:['req.headers.cookie','req.headers.authorization','req.body','res.headers.set-cookie'],level:'info'}:false});
   await app.register(cookie);
   await app.register(helmet);
-  if(options.rateLimit!==false)await app.register(rateLimit,{max:120,timeWindow:'1 minute'});
+  if(options.rateLimit!==false)await app.register(rateLimit,{max:600,timeWindow:'1 minute'});
   const dummyHash=await hashPassword(token());
   const user=(r:FastifyRequest)=>{if(!r.principal)throw new AppError(401,'UNAUTHENTICATED','Sign in required');return r.principal;};
   const operator=(r:FastifyRequest)=>{const u=user(r);if(u.role!=='OPERATOR')throw new AppError(403,'FORBIDDEN','Operator permission required');return u;};
