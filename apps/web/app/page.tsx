@@ -130,15 +130,15 @@ export default function Console() {
       active = false;
     };
   }, []);
-  queryGeneration.current = `${csrf}:${pageCursor ?? ''}:${approvalCursor ?? ''}`;
+  queryGeneration.current = `${csrf}:${pageCursor ?? ''}:${approvalCursor ?? ''}:${filter}`;
   const refresh = useCallback(async () => {
-    const generation = `${csrf}:${pageCursor ?? ''}:${approvalCursor ?? ''}`;
+    const generation = `${csrf}:${pageCursor ?? ''}:${approvalCursor ?? ''}:${filter}`;
     const current = identity.current;
     const [d, w, r, p] = await Promise.all([
       request<Dashboard>('/dashboard'),
       request<{ items: Workflow[] }>('/workflows'),
       request<{ items: Run[]; nextCursor: string | null }>(
-        `/runs?limit=30${pageCursor ? `&cursor=${pageCursor}` : ''}`,
+        `/runs?limit=30${filter !== 'ALL' ? `&status=${filter}` : ''}${pageCursor ? `&cursor=${pageCursor}` : ''}`,
       ),
       request<{ items: Run[]; nextCursor: string | null }>(
         `/runs?status=WAITING_APPROVAL&limit=50${approvalCursor ? `&cursor=${approvalCursor}` : ''}`,
@@ -151,7 +151,7 @@ export default function Console() {
     setCursor(r.nextCursor);
     setPendingRuns(p.items);
     setPendingNext(p.nextCursor);
-  }, [request, pageCursor, approvalCursor, csrf]);
+  }, [request, pageCursor, approvalCursor, csrf, filter]);
   useEffect(() => {
     if (!user) return;
     let active = true;
@@ -858,7 +858,10 @@ export default function Console() {
                   <select
                     aria-label="Filter executions"
                     value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
+                    onChange={(e) => {
+                      setFilter(e.target.value);
+                      setPageCursor(null);
+                    }}
                   >
                     <option value="ALL">All states</option>
                     {Object.entries(labels).map(([key, value]) => (

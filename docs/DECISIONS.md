@@ -20,3 +20,5 @@
 The feature branch and PR are the review boundary. CI verifies and packages source; it does not merge or publish production. Owner-approved hosting/secrets are required for a release.
 
 The local execution container cannot install native PostgreSQL through the package manager and isolates independent terminal network namespaces. A single-parent harness runs PGlite and checks. Native PostgreSQL is independently checked in CI. The browser fallback extracts real Chromium when CDN delivery or tar ownership metadata is unavailable.
+
+The build clears only the ignored Next.js output directory before compiling. Local repeated builds were observed to retain an older static HTML/client-reference set even after a changed client chunk was emitted. Rebuilding that output together prevents verification from loading a prior client bundle. Test-summary generation also rejects reports that predate changed application/test sources.

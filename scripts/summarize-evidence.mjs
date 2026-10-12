@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 const read = (p) => JSON.parse(readFileSync(p, 'utf8'));
@@ -25,6 +25,19 @@ const candidates = execFileSync(
 )
   .split('\0')
   .filter(Boolean);
+const unitReportTime = statSync('artifacts/test-results.json').mtimeMs;
+const browserReportTime = statSync('artifacts/e2e-results.json').mtimeMs;
+for (const path of [...new Set(candidates)]) {
+  if (path === 'apps/web/next-env.d.ts') continue;
+  const unitSource =
+    /^(apps\/api\/|packages\/|prisma\/|tests\/(unit|integration)\/|vitest\.config)/.test(path);
+  const browserSource = /^(apps\/|packages\/|tests\/e2e\/|playwright\.config)/.test(path);
+  if (
+    (unitSource && statSync(path).mtimeMs > unitReportTime) ||
+    (browserSource && statSync(path).mtimeMs > browserReportTime)
+  )
+    throw new Error(`Test report predates changed source: ${path}`);
+}
 const sourceFiles = [...new Set(candidates)]
   .filter((p) =>
     /^(apps\/|packages\/|prisma\/|tests\/|scripts\/|\.github\/workflows\/|package(?:-lock)?\.json|tsconfig\.json|(?:vitest\.config|playwright\.config)\.ts)/.test(

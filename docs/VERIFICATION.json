@@ -11,10 +11,7 @@
     "passed": 10,
     "failed": 0,
     "flaky": 0,
-    "projects": [
-      "desktop-chromium",
-      "mobile-chromium"
-    ]
+    "projects": ["desktop-chromium", "mobile-chromium"]
   },
   "coverage": {
     "scope": "Selected API/auth/config/engine/errors/sandbox and shared contract source; excludes frontend and process launchers",
@@ -31,7 +28,7 @@
     "critical": 0,
     "total": 0
   },
-  "sourceTreeSha256": "fab1e5bff1e630f25eb8ff2ce3a2cb74d0f38333309d769a683973f4d3ebeeeb",
+  "sourceTreeSha256": "2576c6ed52ebf06a245a02a22c077e59a9f678519596eff3909256ee97e85446",
   "sourceFiles": [
     {
       "path": ".github/workflows/verify.yml",
@@ -87,7 +84,7 @@
     },
     {
       "path": "apps/web/app/page.tsx",
-      "sha256": "670944840abc4c13c94644045e236a3e28ae91bdb9a7c17c1096daac7e32d933"
+      "sha256": "4251fe7e1cfe1c008a02215b2454137cc3eb6887bc34482067a54186291aba94"
     },
     {
       "path": "apps/web/next.config.ts",
@@ -95,7 +92,7 @@
     },
     {
       "path": "apps/web/package.json",
-      "sha256": "8e93447ee9514e4ee329767293417a0317eb3fed4868e40d0af013fe37da8b0a"
+      "sha256": "0e3501376539b8e088ea9a7fde3c1bad65a64ba7ab27726e8753c863d5889036"
     },
     {
       "path": "apps/web/tsconfig.json",
@@ -146,6 +143,10 @@
       "sha256": "bb284e0afd91d5004733f5e4d1bc18d2b68c01ea58e7650c85a0ae5e28fb296b"
     },
     {
+      "path": "scripts/clean-web-build.mjs",
+      "sha256": "b06ad92c42f0d7b8b488c32aa763c063aa3221052b641228662d0aa48b905882"
+    },
+    {
       "path": "scripts/dependency-audit.mjs",
       "sha256": "2af62463d66dd3ffbb37df65d6081554425d12eab41f78eca00965970c1e09d8"
     },
@@ -167,7 +168,7 @@
     },
     {
       "path": "scripts/summarize-evidence.mjs",
-      "sha256": "7371d12833365a1827bebf0a622fd3d9ecd2cd2233d2dcca111a1562bed0ab29"
+      "sha256": "361f5032e786537c210ee2404ef54665b0a0445a79d6ebd75dc5bc024b51a5d9"
     },
     {
       "path": "scripts/verify-local.mjs",
@@ -175,7 +176,7 @@
     },
     {
       "path": "tests/e2e/console.spec.ts",
-      "sha256": "f39bfdc5c6432b1d6ebafe2d1e42190ef35b6243e85f623be3a2daa0da1bed07"
+      "sha256": "118f5b33955c367a80168007a3d4b35d4913796d189ea931328822efa4658c96"
     },
     {
       "path": "tests/integration/system.test.ts",
@@ -201,106 +202,106 @@
   "screenshots": [
     {
       "path": "docs/screenshots/approval-rejection.png",
-      "sha256": "bcb2e1870fe1855bf3f3a55797cbda6f3cc45eb9697418cc3cfba0fe42f4d5d0",
-      "bytes": 97718,
+      "sha256": "3de59083cf4565442815d8e91207aa8efd876aae0af1d0d89befcf4e91f1dcb3",
+      "bytes": 97161,
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/screenshots/approval.png",
-      "sha256": "2889eb571e0307803eb70998b29e00739776372f2cf6a401618ec1ac9c580830",
-      "bytes": 107103,
+      "sha256": "6d57e9956e9c5d907fa213e8b5f41e0d43ea77f7e528c6aa19d3765f29b4c277",
+      "bytes": 107608,
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/screenshots/dashboard.png",
-      "sha256": "5aa9a6bc8f72e160736c52ce4110c3180d02e7d18db760c12b28fc090e2d57cf",
-      "bytes": 203523,
+      "sha256": "c0c156eb51147172c34f8817775bb695bff8b632466cd298ba5402df4d86153e",
+      "bytes": 204292,
       "width": 1440,
       "height": 1016
     },
     {
       "path": "docs/screenshots/execution-history.png",
-      "sha256": "512f17e5b83dca50fbec00702d5bd9fe2d9f1125383779e55b3d6b01e7100927",
-      "bytes": 68308,
+      "sha256": "47701c76e6a5e3c56643ecf3e482260bc1fd905957ee2a83f9c9e048ea8e6273",
+      "bytes": 68408,
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/screenshots/failure.png",
-      "sha256": "05aef788d2014314682f3b05ffe4b3bb379cdf8edceb91c122e7bf399cebab5f",
-      "bytes": 124855,
+      "sha256": "3ddaeee787924502cf625253e2bd375b9d501eb9a197054a311d3cad0c40c8cd",
+      "bytes": 124052,
       "width": 1440,
       "height": 1131
     },
     {
       "path": "docs/screenshots/mobile-approval-rejection.png",
-      "sha256": "83763044133b25a3cc2b670b2ef5b19a36f798dbdeb0df90e0da86b8b93b42b1",
-      "bytes": 77113,
+      "sha256": "bb29eec965327856496b3488a613d3648810d277127bf7d6683a9ae17325b1f2",
+      "bytes": 77125,
       "width": 390,
       "height": 1192
     },
     {
       "path": "docs/screenshots/mobile-approval.png",
-      "sha256": "954d4f099e970e761c7fd267203e4ce2076fde55d57a058fc530cd18d4003100",
-      "bytes": 87503,
+      "sha256": "c321fc658cb4bbea3da679770145e5cd1d537bb04847eb1f598c6cf15f063251",
+      "bytes": 87443,
       "width": 390,
       "height": 1331
     },
     {
       "path": "docs/screenshots/mobile-dashboard.png",
-      "sha256": "49a008ece4c6fc71c788e8568fd65dc3e276e9c1f88ae66315df51ddf685b6ae",
-      "bytes": 162258,
+      "sha256": "7d83977f5e8327bfd09a0b52fc1af4f74818084aec0ef500c69695e6b7c03b78",
+      "bytes": 162811,
       "width": 390,
       "height": 1779
     },
     {
       "path": "docs/screenshots/mobile-execution-history.png",
-      "sha256": "3170cf5edcc7b541ed0ff8308da77a5216878ccad0c07a80b7158877f6f8468f",
-      "bytes": 254264,
+      "sha256": "4d410a290298aae19ab6de12adb1658e0a7bdfcf8a693bb58d3c86909081ec9e",
+      "bytes": 254431,
       "width": 390,
       "height": 3256
     },
     {
       "path": "docs/screenshots/mobile-failure.png",
-      "sha256": "d8dcde2d280dc4c7f07ed739bf564d1eb2d30752b4b39a1d4229e992ec22a243",
-      "bytes": 106341,
+      "sha256": "5b9de214863c9062f64652920396f251a3a2baa7a8c521b2795c09492d531fd7",
+      "bytes": 105270,
       "width": 390,
       "height": 1606
     },
     {
       "path": "docs/screenshots/mobile-recovery.png",
-      "sha256": "a54014999c502a6a80734cc63bec0efb77cd41eb11850320b89c8aca0c9b0ebe",
-      "bytes": 127483,
+      "sha256": "e85d81ab10db01b4a624690b9a48ba242cca3bdee4fb2f8622378bef563f3dde",
+      "bytes": 126413,
       "width": 390,
       "height": 1931
     },
     {
       "path": "docs/screenshots/mobile-success.png",
-      "sha256": "34844599972cad143575c32d2ae46685ea17290cb7e5b5db2d517141e5cbcac9",
-      "bytes": 99616,
+      "sha256": "15df554853e7998c657d0cd45382f2db011cbd078c80e1e8612a91a11e706695",
+      "bytes": 98819,
       "width": 390,
       "height": 1547
     },
     {
       "path": "docs/screenshots/mobile-workflow-creation.png",
-      "sha256": "5bc1b213c4d67ff16f92535486ba223e3459d30710dd5fcab6adfd4898aa88af",
-      "bytes": 73277,
+      "sha256": "b171fcac910f8aa4f08afd6312870b08a7971ea5c6a0c26aec147c8e4d0e27a3",
+      "bytes": 73345,
       "width": 390,
       "height": 1093
     },
     {
       "path": "docs/screenshots/recovery.png",
-      "sha256": "d2af0fb16cfff536d9234480d854ce4572a16e16c44c6c815e796ba9bd58a413",
-      "bytes": 147368,
+      "sha256": "7b799822543463c09e3da224ce820dea1441d32fdda77c52d24a4470ca5ab42b",
+      "bytes": 146598,
       "width": 1440,
       "height": 1314
     },
     {
       "path": "docs/screenshots/success.png",
-      "sha256": "6581bee8838e0be642f34fe7cfe72f93979d0308e6a60ff6c51c0579bc0a657d",
-      "bytes": 119140,
+      "sha256": "35a746ed734a94ad1e624129f0cb4c359df8d2c3170abee318a46048ede288c3",
+      "bytes": 119168,
       "width": 1440,
       "height": 1053
     },

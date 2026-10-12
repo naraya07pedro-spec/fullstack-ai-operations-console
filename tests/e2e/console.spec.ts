@@ -186,6 +186,14 @@ test('pagination survives polling and hostile input stays escaped', async ({ pag
     (r) => r.url().includes('/api/runs?limit=30&cursor=') && r.status() === 200,
   );
   await expect(page.locator('.run-list').getByText(oldest, { exact: false })).toBeVisible();
+  const filtered = page.waitForResponse(
+    (r) => r.url().includes('/api/runs?limit=30&status=WAITING_APPROVAL') && r.status() === 200,
+  );
+  await page.getByLabel('Filter executions', { exact: true }).selectOption('WAITING_APPROVAL');
+  const filteredRows = (await (await filtered).json()).items;
+  expect(filteredRows.length).toBeGreaterThan(0);
+  expect(filteredRows.every((r: { status: string }) => r.status === 'WAITING_APPROVAL')).toBe(true);
+  await expect(page.locator('.run-list').getByText(newest, { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Approvals', exact: true }).click();
   await expect(page.getByText(hostile, { exact: true })).toBeVisible();
   expect(

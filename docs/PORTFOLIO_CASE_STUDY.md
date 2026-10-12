@@ -12,7 +12,7 @@ The engineering boundaries are concrete: persisted sessions and owner checks; op
 
 ## Proof
 
-The [evidence index](EVIDENCE.md) links demonstrated behavior to named tests, executed results, CI runs, and authentic screenshots. Unit checks cover contracts/credentials. Database/API cases cover ownership, rollback, concurrent admission, state transitions, real HTTP failures/timeouts, and process death. Browser tests drive the built UI against the running backend/database/worker/sandbox, with desktop/mobile recordings and selected states.
+An inspected native PostgreSQL CI run passed 55 unit/API/database/reliability checks and 10 browser checks. Sixteen authentic screenshots and a recorded workflow walkthrough accompany the source. The [evidence index](EVIDENCE.md) links demonstrated behavior to named tests, executed results, CI runs, and authentic screenshots. Unit checks cover contracts/credentials. Database/API cases cover ownership, rollback, concurrent admission, state transitions, real HTTP failures/timeouts, and process death. Browser tests drive the built UI against the running backend/database/worker/sandbox, with desktop/mobile recordings and selected states.
 
 Screenshots document configuration, waiting approval, successful output, failures, rejection, and recovery of the same execution. Reports and videos stay in CI artifacts instead of bulky source binaries.
 
