@@ -13,7 +13,7 @@
 - No jitter, circuit breaker, Retry-After support, heartbeat extension, or cancellation endpoint. Lease = timeout + five seconds.
 - Recovery retains the snapshot and run identity; maximum three recovery cycles. Rejected/successful runs cannot be recovered.
 - Events are transactional records, not a tamper-proof ledger. No retention/export administration UI.
-- Workflow listing caps at 100. Browser list/pending-decision pagination limits are documented alongside the API.
+- Workflow listing caps at 100. Browser history and approvals use stable cursor pages and retain the selected page during polling. No previous-page stack is implemented; users can jump to the newest page.
 
 ## Security verification limits
 
@@ -25,7 +25,7 @@
 
 ## Environment and release
 
-Local database proof uses the actual PostgreSQL WASM/PGlite engine through a development TCP multiplexer. It differs from native authentication/concurrency and has no socket authentication; it is loopback-only and prohibited in production. Native PostgreSQL CI evidence is separately identified.
+Local database proof uses the actual PostgreSQL WASM/PGlite engine through a development TCP multiplexer. It differs from native authentication/concurrency and has no socket authentication; it is loopback-only and prohibited in production. The bridge does not reliably relay constraint-error responses to Prisma's Rust driver. The local harness explicitly skips one native-only constraint-error case with `LOCAL_PGLITE=1`; the full case executes against native PostgreSQL in CI. Counts distinguish that skip from passed tests.
 
 Browser evidence covers headless Chromium desktop/mobile emulation, keyboard, and reduced motion. Firefox, WebKit/Safari, physical devices, and broad accessibility certification are not claimed. CI recordings/traces/reports expire after 14 days and may require login; selected PNGs remain in Git.
 

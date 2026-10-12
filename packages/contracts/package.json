@@ -1,1 +1,7 @@
-{"name":"@console/contracts","version":"0.1.0","private":true,"type":"module","exports":"./src/index.ts"}
+{
+  "name": "@console/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts"
+}

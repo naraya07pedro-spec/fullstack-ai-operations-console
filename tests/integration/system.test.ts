@@ -1,92 +1,704 @@
-import { beforeAll,beforeEach,afterEach,afterAll,describe,it,expect } from 'vitest';
+import { beforeAll, beforeEach, afterEach, afterAll, describe, it, expect } from 'vitest';
 import { PrismaClient, Prisma } from '@prisma/client';
 import Fastify from 'fastify';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { buildApp } from '../../apps/api/src/app.js';
-import { hashPassword,digest } from '../../apps/api/src/auth.js';
-import { admitRun,claimRun,decideRun,executeSandbox,reapExpired,recoverRun,settleRun,workerTick } from '../../apps/api/src/engine.js';
+import { hashPassword, digest } from '../../apps/api/src/auth.js';
+import {
+  admitRun,
+  claimRun,
+  decideRun,
+  executeSandbox,
+  reapExpired,
+  recoverRun,
+  settleRun,
+  workerTick,
+} from '../../apps/api/src/engine.js';
 import { buildSandbox } from '../../apps/api/src/sandbox.js';
 import { workflowSchema } from '../../packages/contracts/src/index.js';
-const db=new PrismaClient();const password='test-only-long-password-2026',origin='http://localhost:3000';
-let app:Awaited<ReturnType<typeof buildApp>>,sandbox:Awaited<ReturnType<typeof buildSandbox>>,sandboxUrl:string;
-let owner:string,other:string,viewer:string;
-const pause=(ms:number)=>new Promise(r=>setTimeout(r,ms));
-async function waitFor<T>(action:()=>Promise<T>,condition:(v:T)=>boolean,timeout=10000){const until=Date.now()+timeout;while(Date.now()<until){const value=await action();if(condition(value))return value;await pause(30);}throw new Error('Condition not reached before timeout');}
-async function login(email='owner@example.test'){
- const response=await app.inject({method:'POST',url:'/v1/auth/login',headers:{origin},payload:{email,password}});
- expect(response.statusCode).toBe(200);const c=response.headers['set-cookie'];const value=Array.isArray(c)?c[0]:String(c);return {cookie:value.split(';')[0],'x-csrf-token':response.json().csrfToken,origin};
+const db = new PrismaClient();
+const password = 'test-only-long-password-2026',
+  origin = 'http://localhost:3000';
+let app: Awaited<ReturnType<typeof buildApp>>,
+  sandbox: Awaited<ReturnType<typeof buildSandbox>>,
+  sandboxUrl: string;
+let owner: string, other: string, viewer: string;
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+async function waitFor<T>(action: () => Promise<T>, condition: (v: T) => boolean, timeout = 10000) {
+  const until = Date.now() + timeout;
+  while (Date.now() < until) {
+    const value = await action();
+    if (condition(value)) return value;
+    await pause(30);
+  }
+  throw new Error('Condition not reached before timeout');
 }
-async function workflow(overrides:Record<string,unknown>={},ownerId=owner){return db.workflow.create({data:{...workflowSchema.parse({name:'Integration triage',requiresApproval:false,...overrides}),ownerId}});}
-async function run(overrides:Record<string,unknown>={},key=crypto.randomUUID()){const w=await workflow(overrides);return (await admitRun(db,owner,w.id,key,{message:'Urgent billing invoice needs review'})).run;}
-async function drain(id:string){await waitFor(async()=>{await workerTick(db,sandboxUrl,process.env.SANDBOX_TOKEN!);return db.run.findUniqueOrThrow({where:{id}});},r=>['SUCCEEDED','FAILED','REJECTED'].includes(r.status));return db.run.findUniqueOrThrow({where:{id},include:{attempts:true,events:true}});}
-beforeAll(async()=>{
- if(process.env.NODE_ENV!=='test'||process.env.ALLOW_TEST_DB_RESET!=='1')throw new Error('Use a dedicated test database and ALLOW_TEST_DB_RESET=1. This suite truncates that database.');
- app=await buildApp(db,{rateLimit:false});sandbox=await buildSandbox(process.env.SANDBOX_TOKEN!);sandboxUrl=await sandbox.app.listen({port:0,host:'127.0.0.1'});
+async function login(email = 'owner@example.test') {
+  const response = await app.inject({
+    method: 'POST',
+    url: '/v1/auth/login',
+    headers: { origin },
+    payload: { email, password },
+  });
+  expect(response.statusCode).toBe(200);
+  const c = response.headers['set-cookie'];
+  const value = Array.isArray(c) ? c[0] : String(c);
+  return { cookie: value.split(';')[0], 'x-csrf-token': response.json().csrfToken, origin };
+}
+async function workflow(overrides: Record<string, unknown> = {}, ownerId = owner) {
+  return db.workflow.create({
+    data: {
+      ...workflowSchema.parse({
+        name: 'Integration triage',
+        requiresApproval: false,
+        ...overrides,
+      }),
+      ownerId,
+    },
+  });
+}
+async function run(overrides: Record<string, unknown> = {}, key = crypto.randomUUID()) {
+  const w = await workflow(overrides);
+  return (await admitRun(db, owner, w.id, key, { message: 'Urgent billing invoice needs review' }))
+    .run;
+}
+async function drain(id: string) {
+  await waitFor(
+    async () => {
+      await workerTick(db, sandboxUrl, process.env.SANDBOX_TOKEN!);
+      return db.run.findUniqueOrThrow({ where: { id } });
+    },
+    (r) => ['SUCCEEDED', 'FAILED', 'REJECTED'].includes(r.status),
+  );
+  return db.run.findUniqueOrThrow({ where: { id }, include: { attempts: true, events: true } });
+}
+beforeAll(async () => {
+  if (process.env.NODE_ENV !== 'test' || process.env.ALLOW_TEST_DB_RESET !== '1')
+    throw new Error(
+      'Use a dedicated test database and ALLOW_TEST_DB_RESET=1. This suite truncates that database.',
+    );
+  app = await buildApp(db, { rateLimit: false });
+  sandbox = await buildSandbox(process.env.SANDBOX_TOKEN!);
+  sandboxUrl = await sandbox.app.listen({ port: 0, host: '127.0.0.1' });
 });
-beforeEach(async()=>{
- await db.$executeRawUnsafe('TRUNCATE "RunEvent", "Attempt", "Run", "Workflow", "Session", "User" CASCADE');
- const passwordHash=await hashPassword(password);
- const a=await db.user.create({data:{email:'owner@example.test',passwordHash}}),b=await db.user.create({data:{email:'other@example.test',passwordHash}}),v=await db.user.create({data:{email:'viewer@example.test',role:'VIEWER',passwordHash}});
- owner=a.id;other=b.id;viewer=v.id;
+beforeEach(async () => {
+  await db.$executeRawUnsafe(
+    'TRUNCATE "RunEvent", "Attempt", "Run", "Workflow", "Session", "User" CASCADE',
+  );
+  const passwordHash = await hashPassword(password);
+  const a = await db.user.create({ data: { email: 'owner@example.test', passwordHash } }),
+    b = await db.user.create({ data: { email: 'other@example.test', passwordHash } }),
+    v = await db.user.create({
+      data: { email: 'viewer@example.test', role: 'VIEWER', passwordHash },
+    });
+  owner = a.id;
+  other = b.id;
+  viewer = v.id;
 });
-afterAll(async()=>{await app?.close();await sandbox?.app.close();await db.$disconnect();});
-afterEach(async()=>{await db.$disconnect();});
+afterAll(async () => {
+  await app?.close();
+  await sandbox?.app.close();
+  await db.$disconnect();
+});
+afterEach(async () => {
+  await db.$disconnect();
+});
 
-describe('authentication and authorization through the API',()=>{
- it('connects to the real database and rejects unauthenticated access',async()=>{expect((await app.inject('/health')).json()).toMatchObject({database:'connected'});for(const url of ['/v1/workflows','/v1/runs','/v1/dashboard','/v1/auth/me'])expect((await app.inject(url)).statusCode).toBe(401);});
- it('returns generic wrong-credential errors without password data',async()=>{for(const email of ['owner@example.test','missing@example.test']){const r=await app.inject({method:'POST',url:'/v1/auth/login',headers:{origin},payload:{email,password:'incorrect-password-123'}});expect(r.statusCode).toBe(401);expect(r.json().code).toBe('INVALID_CREDENTIALS');expect(r.body).not.toContain('passwordHash');}});
- it('uses HttpOnly SameSite cookies and persists only the token hash',async()=>{const h=await login();const response=await app.inject({url:'/v1/auth/me',headers:h});expect(response.json().user).toMatchObject({email:'owner@example.test',role:'OPERATOR'});expect(response.body).not.toContain('passwordHash');const raw=h.cookie.split('=')[1];expect(await db.session.findUnique({where:{id:raw}})).toBeNull();expect(await db.session.findUnique({where:{id:digest(raw)}})).not.toBeNull();const r=await app.inject({method:'POST',url:'/v1/auth/login',headers:{origin},payload:{email:'owner@example.test',password}});expect(String(r.headers['set-cookie'])).toContain('HttpOnly');expect(String(r.headers['set-cookie'])).toContain('SameSite=Strict');});
- it('rejects missing CSRF tokens and foreign origins',async()=>{const h=await login();for(const headers of [{cookie:h.cookie,origin},{...h,origin:'https://attacker.test'}]){const r=await app.inject({method:'POST',url:'/v1/workflows',headers,payload:{name:'Forbidden workflow'}});expect(r.statusCode).toBe(403);}expect((await app.inject({method:'POST',url:'/v1/auth/login',headers:{origin:'https://attacker.test'},payload:{email:'owner@example.test',password}})).statusCode).toBe(403);});
- it('revokes logout sessions and rejects expired and forged sessions',async()=>{const h=await login();expect((await app.inject({method:'POST',url:'/v1/auth/logout',headers:h})).statusCode).toBe(200);expect((await app.inject({url:'/v1/auth/me',headers:h})).statusCode).toBe(401);const h2=await login();await db.session.updateMany({where:{userId:owner},data:{expiresAt:new Date(0)}});expect((await app.inject({url:'/v1/auth/me',headers:h2})).statusCode).toBe(401);expect((await app.inject({url:'/v1/auth/me',headers:{cookie:'ops_session='+ 'f'.repeat(64)}})).statusCode).toBe(401);});
- it('prevents viewers from changing workflows, running, deciding, and recovering',async()=>{const h=await login('viewer@example.test');const w=await workflow({requiresApproval:true},viewer);const r=(await admitRun(db,viewer,w.id,crypto.randomUUID(),{message:'Viewer input'})).run;
-  const paths=[['POST','/v1/workflows',{name:'Blocked creation'}],['PATCH',`/v1/workflows/${w.id}`,{...workflowSchema.parse({name:'Blocked change'}),version:1}],['DELETE',`/v1/workflows/${w.id}`,undefined],['POST',`/v1/workflows/${w.id}/runs`,{message:'Blocked execution'}],['POST',`/v1/runs/${r.id}/decision`,{decision:'approve'}],['POST',`/v1/runs/${r.id}/retry`,undefined]] as const;
-  for(const [method,url,payload] of paths)expect((await app.inject({method,url,headers:{...h,'idempotency-key':crypto.randomUUID()},payload})).statusCode).toBe(403);
- });
- it('scopes workflow/run/dashboard data and mutations to their owner',async()=>{const h=await login('other@example.test'),w=await workflow({requiresApproval:true}),r=(await admitRun(db,owner,w.id,crypto.randomUUID(),{message:'Owner private input'})).run;
-  expect((await app.inject({url:'/v1/workflows',headers:h})).json().items).toHaveLength(0);expect((await app.inject({url:'/v1/runs',headers:h})).json().items).toHaveLength(0);expect((await app.inject({url:'/v1/dashboard',headers:h})).json().counts.WAITING_APPROVAL).toBe(0);
-  for(const [method,url,payload] of [['GET',`/v1/runs/${r.id}`,undefined],['POST',`/v1/runs/${r.id}/decision`,{decision:'approve'}],['POST',`/v1/runs/${r.id}/retry`,undefined],['DELETE',`/v1/workflows/${w.id}`,undefined],['POST',`/v1/workflows/${w.id}/runs`,{message:'Forged request'}]] as const)expect((await app.inject({method,url,headers:{...h,'idempotency-key':crypto.randomUUID()},payload})).statusCode).toBe(404);
- });
- it('actually limits repeated login attempts',async()=>{const limited=await buildApp(db);try{const replies=[];for(let i=0;i<9;i++)replies.push(await limited.inject({method:'POST',url:'/v1/auth/login',headers:{origin},payload:{email:'missing@example.test',password}}));expect(replies.at(-1)?.statusCode).toBe(429);}finally{await limited.close();}});
- it('does not accept oversized JSON or unknown workflow fields',async()=>{const h=await login();const oversized=await app.inject({method:'POST',url:'/v1/workflows',headers:h,payload:{name:'x'.repeat(17000)}});expect(oversized.statusCode).toBe(413);const extra=await app.inject({method:'POST',url:'/v1/workflows',headers:h,payload:{name:'Valid name',ownerId:other}});expect(extra.statusCode).toBe(400);expect(extra.json().code).toBe('VALIDATION_ERROR');});
+describe('authentication and authorization through the API', () => {
+  it('connects to the real database and rejects unauthenticated access', async () => {
+    expect((await app.inject('/health')).json()).toMatchObject({ database: 'connected' });
+    for (const url of ['/v1/workflows', '/v1/runs', '/v1/dashboard', '/v1/auth/me'])
+      expect((await app.inject(url)).statusCode).toBe(401);
+  });
+  it('returns generic wrong-credential errors without password data', async () => {
+    for (const email of ['owner@example.test', 'missing@example.test']) {
+      const r = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/login',
+        headers: { origin },
+        payload: { email, password: 'incorrect-password-123' },
+      });
+      expect(r.statusCode).toBe(401);
+      expect(r.json().code).toBe('INVALID_CREDENTIALS');
+      expect(r.body).not.toContain('passwordHash');
+    }
+  });
+  it('uses HttpOnly SameSite cookies and persists only the token hash', async () => {
+    const h = await login();
+    const response = await app.inject({ url: '/v1/auth/me', headers: h });
+    expect(response.json().user).toMatchObject({ email: 'owner@example.test', role: 'OPERATOR' });
+    expect(response.body).not.toContain('passwordHash');
+    const raw = h.cookie.split('=')[1];
+    expect(await db.session.findUnique({ where: { id: raw } })).toBeNull();
+    expect(await db.session.findUnique({ where: { id: digest(raw) } })).not.toBeNull();
+    const r = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      headers: { origin },
+      payload: { email: 'owner@example.test', password },
+    });
+    expect(String(r.headers['set-cookie'])).toContain('HttpOnly');
+    expect(String(r.headers['set-cookie'])).toContain('SameSite=Strict');
+  });
+  it('rejects missing CSRF tokens and foreign origins', async () => {
+    const h = await login();
+    for (const headers of [
+      { cookie: h.cookie, origin },
+      { ...h, origin: 'https://attacker.test' },
+    ]) {
+      const r = await app.inject({
+        method: 'POST',
+        url: '/v1/workflows',
+        headers,
+        payload: { name: 'Forbidden workflow' },
+      });
+      expect(r.statusCode).toBe(403);
+    }
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/v1/auth/login',
+          headers: { origin: 'https://attacker.test' },
+          payload: { email: 'owner@example.test', password },
+        })
+      ).statusCode,
+    ).toBe(403);
+  });
+  it('revokes logout sessions and rejects expired and forged sessions', async () => {
+    const h = await login();
+    expect(
+      (await app.inject({ method: 'POST', url: '/v1/auth/logout', headers: h })).statusCode,
+    ).toBe(200);
+    expect((await app.inject({ url: '/v1/auth/me', headers: h })).statusCode).toBe(401);
+    const h2 = await login();
+    await db.session.updateMany({ where: { userId: owner }, data: { expiresAt: new Date(0) } });
+    expect((await app.inject({ url: '/v1/auth/me', headers: h2 })).statusCode).toBe(401);
+    expect(
+      (
+        await app.inject({
+          url: '/v1/auth/me',
+          headers: { cookie: 'ops_session=' + 'f'.repeat(64) },
+        })
+      ).statusCode,
+    ).toBe(401);
+  });
+  it('prevents viewers from changing workflows, running, deciding, and recovering', async () => {
+    const h = await login('viewer@example.test');
+    const w = await workflow({ requiresApproval: true }, viewer);
+    const r = (await admitRun(db, viewer, w.id, crypto.randomUUID(), { message: 'Viewer input' }))
+      .run;
+    const paths = [
+      ['POST', '/v1/workflows', { name: 'Blocked creation' }],
+      [
+        'PATCH',
+        `/v1/workflows/${w.id}`,
+        { ...workflowSchema.parse({ name: 'Blocked change' }), version: 1 },
+      ],
+      ['DELETE', `/v1/workflows/${w.id}`, undefined],
+      ['POST', `/v1/workflows/${w.id}/runs`, { message: 'Blocked execution' }],
+      ['POST', `/v1/runs/${r.id}/decision`, { decision: 'approve' }],
+      ['POST', `/v1/runs/${r.id}/retry`, undefined],
+    ] as const;
+    for (const [method, url, payload] of paths)
+      expect(
+        (
+          await app.inject({
+            method,
+            url,
+            headers: { ...h, 'idempotency-key': crypto.randomUUID() },
+            payload,
+          })
+        ).statusCode,
+      ).toBe(403);
+  });
+  it('scopes workflow/run/dashboard data and mutations to their owner', async () => {
+    const h = await login('other@example.test'),
+      w = await workflow({ requiresApproval: true }),
+      r = (await admitRun(db, owner, w.id, crypto.randomUUID(), { message: 'Owner private input' }))
+        .run;
+    expect((await app.inject({ url: '/v1/workflows', headers: h })).json().items).toHaveLength(0);
+    expect((await app.inject({ url: '/v1/runs', headers: h })).json().items).toHaveLength(0);
+    expect(
+      (await app.inject({ url: '/v1/dashboard', headers: h })).json().counts.WAITING_APPROVAL,
+    ).toBe(0);
+    for (const [method, url, payload] of [
+      ['GET', `/v1/runs/${r.id}`, undefined],
+      ['POST', `/v1/runs/${r.id}/decision`, { decision: 'approve' }],
+      ['POST', `/v1/runs/${r.id}/retry`, undefined],
+      ['DELETE', `/v1/workflows/${w.id}`, undefined],
+      ['POST', `/v1/workflows/${w.id}/runs`, { message: 'Forged request' }],
+    ] as const)
+      expect(
+        (
+          await app.inject({
+            method,
+            url,
+            headers: { ...h, 'idempotency-key': crypto.randomUUID() },
+            payload,
+          })
+        ).statusCode,
+      ).toBe(404);
+  });
+  it('actually limits repeated login attempts', async () => {
+    const limited = await buildApp(db);
+    try {
+      const replies = [];
+      for (let i = 0; i < 9; i++)
+        replies.push(
+          await limited.inject({
+            method: 'POST',
+            url: '/v1/auth/login',
+            headers: { origin },
+            payload: { email: 'missing@example.test', password },
+          }),
+        );
+      expect(replies.at(-1)?.statusCode).toBe(429);
+    } finally {
+      await limited.close();
+    }
+  });
+  it('does not accept oversized JSON or unknown workflow fields', async () => {
+    const h = await login();
+    const oversized = await app.inject({
+      method: 'POST',
+      url: '/v1/workflows',
+      headers: h,
+      payload: { name: 'x'.repeat(17000) },
+    });
+    expect(oversized.statusCode).toBe(413);
+    const extra = await app.inject({
+      method: 'POST',
+      url: '/v1/workflows',
+      headers: h,
+      payload: { name: 'Valid name', ownerId: other },
+    });
+    expect(extra.statusCode).toBe(400);
+    expect(extra.json().code).toBe('VALIDATION_ERROR');
+  });
 });
-describe('workflow CRUD, API admission, and database invariants',()=>{
- it('creates, reads, edits with optimistic versioning, and archives while retaining history',async()=>{const h=await login();const created=await app.inject({method:'POST',url:'/v1/workflows',headers:h,payload:{name:'Created workflow'}});expect(created.statusCode).toBe(201);const w=created.json();const admission=await app.inject({method:'POST',url:`/v1/workflows/${w.id}/runs`,headers:{...h,'idempotency-key':'version-test-key'},payload:{message:'Original request'}});expect(admission.statusCode).toBe(201);const data={...workflowSchema.parse({name:'Updated workflow'}),version:1};const changed=await app.inject({method:'PATCH',url:`/v1/workflows/${w.id}`,headers:h,payload:data});expect(changed.json().version).toBe(2);expect((await app.inject({method:'PATCH',url:`/v1/workflows/${w.id}`,headers:h,payload:data})).statusCode).toBe(409);const saved=await db.run.findUniqueOrThrow({where:{id:admission.json().run.id}});expect(saved.workflowSnapshot).toMatchObject({name:'Created workflow',version:1});expect((await app.inject({method:'DELETE',url:`/v1/workflows/${w.id}`,headers:h})).statusCode).toBe(200);expect((await app.inject({url:'/v1/workflows',headers:h})).json().items).toHaveLength(0);expect((await app.inject({url:`/v1/runs/${saved.id}`,headers:h})).statusCode).toBe(200);expect((await app.inject({method:'POST',url:`/v1/workflows/${w.id}/runs`,headers:{...h,'idempotency-key':'archived-test-key'},payload:{message:'No new run'}})).statusCode).toBe(404);});
- it('returns the same admitted execution for duplicate API requests',async()=>{const h=await login(),w=await workflow();const opts={method:'POST' as const,url:`/v1/workflows/${w.id}/runs`,headers:{...h,'idempotency-key':'duplicate-request-key'},payload:{message:'One request'}};const a=await app.inject(opts),b=await app.inject(opts);expect(a.statusCode).toBe(201);expect(b.statusCode).toBe(200);expect(b.json()).toMatchObject({replayed:true,run:{id:a.json().run.id}});expect(await db.run.count()).toBe(1);expect((await app.inject({...opts,payload:{message:'Different input'}})).statusCode).toBe(409);});
- it('deduplicates eight concurrent admissions at the database uniqueness boundary',async()=>{const w=await workflow();const results=await Promise.all(Array.from({length:8},()=>admitRun(db,owner,w.id,'concurrent-request-key',{message:'Same concurrent request'})));expect(new Set(results.map(r=>r.run.id)).size).toBe(1);expect(results.filter(r=>!r.replayed)).toHaveLength(1);expect(await db.run.count()).toBe(1);expect(await db.runEvent.count()).toBe(1);});
- it('separates different owners using the same idempotency key',async()=>{const a=await workflow(),b=await workflow({},other);const results=await Promise.all([admitRun(db,owner,a.id,'same-owner-scoped-key',{message:'Owner request'}),admitRun(db,other,b.id,'same-owner-scoped-key',{message:'Other request'})]);expect(results[0].run.id).not.toBe(results[1].run.id);});
- it('rejects malformed IDs, query injection, invalid pagination, and missing idempotency keys',async()=>{const h=await login(),w=await workflow();for(const url of ['/v1/runs/not-a-uuid','/v1/runs?limit=1000','/v1/runs?status=DROP_TABLE','/v1/runs?unknown=value'])expect((await app.inject({url,headers:h})).statusCode).toBe(400);expect((await app.inject({method:'POST',url:`/v1/workflows/${w.id}/runs`,headers:h,payload:{message:'Missing key'}})).statusCode).toBe(400);});
- it('paginates stable run records and exposes attempt and event history',async()=>{const h=await login(),a=await run(),b=await run();const first=(await app.inject({url:'/v1/runs?limit=1',headers:h})).json();expect(first.items).toHaveLength(1);expect(first.nextCursor).toBeTruthy();const second=(await app.inject({url:`/v1/runs?limit=1&cursor=${first.nextCursor}`,headers:h})).json();expect(second.items[0].id).not.toBe(first.items[0].id);expect(new Set([first.items[0].id,second.items[0].id])).toEqual(new Set([a.id,b.id]));await drain(a.id);const detail=(await app.inject({url:`/v1/runs/${a.id}`,headers:h})).json();expect(detail.attempts).toHaveLength(1);expect(detail.events.some((e:{type:string})=>e.type==='RUN_SUCCEEDED')).toBe(true);});
- it('enforces foreign keys, limits, successful-output and lease invariants inside PostgreSQL',async()=>{
-  async function constraint(operation:()=>Promise<unknown>,pattern:RegExp){await expect(operation()).rejects.toThrow(pattern);await db.$disconnect();}
-  await constraint(()=>db.workflow.create({data:{...workflowSchema.parse({name:'Foreign key test'}),ownerId:crypto.randomUUID()}}),/foreign key constraint/i);
-  await constraint(()=>db.workflow.create({data:{...workflowSchema.parse({name:'Invalid DB limit'}),maxAttempts:9,ownerId:owner}}),/check constraint|CheckConstraintViolation/i);
-  const r=await run();
-  await constraint(()=>db.run.update({where:{id:r.id},data:{status:'SUCCEEDED'}}),/check constraint|CheckConstraintViolation/i);
-  await constraint(()=>db.run.update({where:{id:r.id},data:{status:'RUNNING'}}),/check constraint|CheckConstraintViolation/i);
-  expect((await db.run.findUniqueOrThrow({where:{id:r.id}})).status).toBe('QUEUED');
- });
- it('rolls back a transaction when a later database operation fails',async()=>{const count=await db.workflow.count();await expect(db.$transaction(async tx=>{await tx.workflow.create({data:{...workflowSchema.parse({name:'Rollback fixture'}),ownerId:owner}});await tx.runEvent.create({data:{runId:crypto.randomUUID(),type:'INVALID',detail:{}}});})).rejects.toBeDefined();expect(await db.workflow.count()).toBe(count);});
+describe('workflow CRUD, API admission, and database invariants', () => {
+  it('creates, reads, edits with optimistic versioning, and archives while retaining history', async () => {
+    const h = await login();
+    const created = await app.inject({
+      method: 'POST',
+      url: '/v1/workflows',
+      headers: h,
+      payload: { name: 'Created workflow' },
+    });
+    expect(created.statusCode).toBe(201);
+    const w = created.json();
+    const admission = await app.inject({
+      method: 'POST',
+      url: `/v1/workflows/${w.id}/runs`,
+      headers: { ...h, 'idempotency-key': 'version-test-key' },
+      payload: { message: 'Original request' },
+    });
+    expect(admission.statusCode).toBe(201);
+    const data = { ...workflowSchema.parse({ name: 'Updated workflow' }), version: 1 };
+    const changed = await app.inject({
+      method: 'PATCH',
+      url: `/v1/workflows/${w.id}`,
+      headers: h,
+      payload: data,
+    });
+    expect(changed.json().version).toBe(2);
+    expect(
+      (
+        await app.inject({
+          method: 'PATCH',
+          url: `/v1/workflows/${w.id}`,
+          headers: h,
+          payload: data,
+        })
+      ).statusCode,
+    ).toBe(409);
+    const saved = await db.run.findUniqueOrThrow({ where: { id: admission.json().run.id } });
+    expect(saved.workflowSnapshot).toMatchObject({ name: 'Created workflow', version: 1 });
+    expect(
+      (await app.inject({ method: 'DELETE', url: `/v1/workflows/${w.id}`, headers: h })).statusCode,
+    ).toBe(200);
+    expect((await app.inject({ url: '/v1/workflows', headers: h })).json().items).toHaveLength(0);
+    expect((await app.inject({ url: `/v1/runs/${saved.id}`, headers: h })).statusCode).toBe(200);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: `/v1/workflows/${w.id}/runs`,
+          headers: { ...h, 'idempotency-key': 'archived-test-key' },
+          payload: { message: 'No new run' },
+        })
+      ).statusCode,
+    ).toBe(404);
+  });
+  it('returns the same admitted execution for duplicate API requests', async () => {
+    const h = await login(),
+      w = await workflow();
+    const opts = {
+      method: 'POST' as const,
+      url: `/v1/workflows/${w.id}/runs`,
+      headers: { ...h, 'idempotency-key': 'duplicate-request-key' },
+      payload: { message: 'One request' },
+    };
+    const a = await app.inject(opts),
+      b = await app.inject(opts);
+    expect(a.statusCode).toBe(201);
+    expect(b.statusCode).toBe(200);
+    expect(b.json()).toMatchObject({ replayed: true, run: { id: a.json().run.id } });
+    expect(await db.run.count()).toBe(1);
+    expect(
+      (await app.inject({ ...opts, payload: { message: 'Different input' } })).statusCode,
+    ).toBe(409);
+  });
+  it('deduplicates eight concurrent admissions at the database uniqueness boundary', async () => {
+    const w = await workflow();
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        admitRun(db, owner, w.id, 'concurrent-request-key', { message: 'Same concurrent request' }),
+      ),
+    );
+    expect(new Set(results.map((r) => r.run.id)).size).toBe(1);
+    expect(results.filter((r) => !r.replayed)).toHaveLength(1);
+    expect(await db.run.count()).toBe(1);
+    expect(await db.runEvent.count()).toBe(1);
+  });
+  it('separates different owners using the same idempotency key', async () => {
+    const a = await workflow(),
+      b = await workflow({}, other);
+    const results = await Promise.all([
+      admitRun(db, owner, a.id, 'same-owner-scoped-key', { message: 'Owner request' }),
+      admitRun(db, other, b.id, 'same-owner-scoped-key', { message: 'Other request' }),
+    ]);
+    expect(results[0].run.id).not.toBe(results[1].run.id);
+  });
+  it('rejects malformed IDs, query injection, invalid pagination, and missing idempotency keys', async () => {
+    const h = await login(),
+      w = await workflow();
+    for (const url of [
+      '/v1/runs/not-a-uuid',
+      '/v1/runs?limit=1000',
+      '/v1/runs?status=DROP_TABLE',
+      '/v1/runs?unknown=value',
+    ])
+      expect((await app.inject({ url, headers: h })).statusCode).toBe(400);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: `/v1/workflows/${w.id}/runs`,
+          headers: h,
+          payload: { message: 'Missing key' },
+        })
+      ).statusCode,
+    ).toBe(400);
+  });
+  it('paginates stable run records and exposes attempt and event history', async () => {
+    const h = await login(),
+      a = await run(),
+      b = await run();
+    const first = (await app.inject({ url: '/v1/runs?limit=1', headers: h })).json();
+    expect(first.items).toHaveLength(1);
+    expect(first.nextCursor).toBeTruthy();
+    const second = (
+      await app.inject({ url: `/v1/runs?limit=1&cursor=${first.nextCursor}`, headers: h })
+    ).json();
+    expect(second.items[0].id).not.toBe(first.items[0].id);
+    expect(new Set([first.items[0].id, second.items[0].id])).toEqual(new Set([a.id, b.id]));
+    await drain(a.id);
+    const detail = (await app.inject({ url: `/v1/runs/${a.id}`, headers: h })).json();
+    expect(detail.attempts).toHaveLength(1);
+    expect(detail.events.some((e: { type: string }) => e.type === 'RUN_SUCCEEDED')).toBe(true);
+  });
+  it.skipIf(process.env.LOCAL_PGLITE === '1')(
+    'enforces foreign keys, limits, successful-output and lease invariants inside PostgreSQL',
+    async () => {
+      async function constraint(operation: () => Promise<unknown>, pattern: RegExp) {
+        await expect(operation()).rejects.toThrow(pattern);
+        await db.$disconnect();
+      }
+      await constraint(
+        () =>
+          db.workflow.create({
+            data: {
+              ...workflowSchema.parse({ name: 'Foreign key test' }),
+              ownerId: crypto.randomUUID(),
+            },
+          }),
+        /foreign key constraint/i,
+      );
+      await constraint(
+        () =>
+          db.workflow.create({
+            data: {
+              ...workflowSchema.parse({ name: 'Invalid DB limit' }),
+              maxAttempts: 9,
+              ownerId: owner,
+            },
+          }),
+        /check constraint|CheckConstraintViolation/i,
+      );
+      const r = await run();
+      await constraint(
+        () => db.run.update({ where: { id: r.id }, data: { status: 'SUCCEEDED' } }),
+        /check constraint|CheckConstraintViolation/i,
+      );
+      await constraint(
+        () => db.run.update({ where: { id: r.id }, data: { status: 'RUNNING' } }),
+        /check constraint|CheckConstraintViolation/i,
+      );
+      expect((await db.run.findUniqueOrThrow({ where: { id: r.id } })).status).toBe('QUEUED');
+    },
+  );
+  it('rolls back a transaction when a later database operation fails', async () => {
+    const count = await db.workflow.count();
+    await expect(
+      db.$transaction(async (tx) => {
+        await tx.workflow.create({
+          data: { ...workflowSchema.parse({ name: 'Rollback fixture' }), ownerId: owner },
+        });
+        await tx.runEvent.create({
+          data: { runId: crypto.randomUUID(), type: 'INVALID', detail: {} },
+        });
+      }),
+    ).rejects.toBeDefined();
+    expect(await db.workflow.count()).toBe(count);
+  });
 });
-describe('approval, reliability, and real HTTP sandbox integration',()=>{
- it('makes no integration call before approval or after rejection',async()=>{const before=sandbox.stats().requests,r=await run({requiresApproval:true});expect(await claimRun(db)).toBeNull();await workerTick(db,sandboxUrl,process.env.SANDBOX_TOKEN!);expect(sandbox.stats().requests).toBe(before);await decideRun(db,owner,r.id,'reject');expect((await db.run.findUniqueOrThrow({where:{id:r.id}})).status).toBe('REJECTED');expect(await claimRun(db)).toBeNull();expect(sandbox.stats().requests).toBe(before);await expect(recoverRun(db,owner,r.id)).rejects.toMatchObject({code:'STATE_CONFLICT'});});
- it('approves once, executes actual HTTP integration, and persists a ticket',async()=>{const r=await run({requiresApproval:true});await decideRun(db,owner,r.id,'approve');await expect(decideRun(db,owner,r.id,'approve')).rejects.toMatchObject({code:'STATE_CONFLICT'});const result=await drain(r.id);expect(result.status).toBe('SUCCEEDED');expect(result.output).toMatchObject({category:'billing',priority:'urgent',provider:'deterministic-sandbox'});expect(result.attempts).toHaveLength(1);});
- it('allows only one outcome for racing approval and rejection',async()=>{const r=await run({requiresApproval:true});const results=await Promise.allSettled([decideRun(db,owner,r.id,'approve'),decideRun(db,owner,r.id,'reject')]);expect(results.filter(v=>v.status==='fulfilled')).toHaveLength(1);expect(await db.runEvent.count({where:{runId:r.id,type:{in:['APPROVED','REJECTED']}}})).toBe(1);});
- it('retries a real HTTP 503 and succeeds on attempt two',async()=>{const r=await run({sandboxMode:'flaky'}),result=await drain(r.id);expect(result.status).toBe('SUCCEEDED');expect(result.attemptCount).toBe(2);expect(result.attempts.map(a=>a.status)).toEqual(['FAILED','SUCCEEDED']);expect(result.events.some(e=>e.type==='RETRY_SCHEDULED')).toBe(true);});
- it('aborts real slow HTTP responses and stops at the attempt limit',async()=>{const r=await run({sandboxMode:'timeout',timeoutMs:100,maxAttempts:2}),result=await drain(r.id);expect(result.status).toBe('FAILED');expect(result.errorCode).toBe('TIMEOUT');expect(result.attemptCount).toBe(2);expect(result.attempts.every(a=>a.status==='TIMED_OUT')).toBe(true);});
- it('does not retry a permanent HTTP 422 failure',async()=>{const r=await run({sandboxMode:'failure',maxAttempts:5}),result=await drain(r.id);expect(result.status).toBe('FAILED');expect(result.attemptCount).toBe(1);expect(result.errorCode).toBe('UPSTREAM_REJECTED');});
- it('recovers a failed run without changing its execution identity',async()=>{const r=await run({sandboxMode:'recoverable',maxAttempts:2});const failed=await drain(r.id);expect(failed.status).toBe('FAILED');expect(failed.attemptCount).toBe(2);const queued=await recoverRun(db,owner,r.id);expect(queued.id).toBe(r.id);const success=await drain(r.id);expect(success.status).toBe('SUCCEEDED');expect(success.attemptCount).toBe(3);expect(success.recoveryCount).toBe(1);expect(success.attempts).toHaveLength(3);});
- it('bounds manual recovery and rejects retries on successful runs',async()=>{const r=await run({sandboxMode:'failure'});await drain(r.id);for(let i=0;i<3;i++){await recoverRun(db,owner,r.id);await drain(r.id);}await expect(recoverRun(db,owner,r.id)).rejects.toMatchObject({code:'STATE_CONFLICT'});const good=await run();await drain(good.id);await expect(recoverRun(db,owner,good.id)).rejects.toMatchObject({code:'STATE_CONFLICT'});});
- it('prevents two simultaneous workers from claiming the same run',async()=>{const r=await run();const claims=await Promise.all([claimRun(db),claimRun(db)]);expect(claims.filter(Boolean)).toHaveLength(1);expect(claims.find(Boolean)?.id).toBe(r.id);expect(await db.attempt.count()).toBe(1);});
- it('fences expired ownership and reaps exhausted worker leases',async()=>{const r=await run({maxAttempts:1}),claimed=await claimRun(db);expect(claimed).not.toBeNull();const future=new Date(Date.now()+60000);expect(await settleRun(db,claimed!,{ok:true,output:{ticketId:'stale-result'}},future)).toBe(false);expect(await reapExpired(db,future)).toBe(1);expect((await db.run.findUniqueOrThrow({where:{id:r.id}})).status).toBe('FAILED');expect((await db.attempt.findFirstOrThrow()).status).toBe('WORKER_LOST');});
- it('recovers after SIGKILL of a real worker process during an HTTP request',async()=>{const before=sandbox.stats(),r=await run({sandboxMode:'slow',timeoutMs:3000,maxAttempts:3});let childOutput='';const child=spawn(process.execPath,['--import','tsx','apps/api/src/worker-main.ts'],{cwd:process.cwd(),env:{...process.env,SANDBOX_URL:sandboxUrl},stdio:['ignore','pipe','pipe']});child.stdout.on('data',v=>{childOutput+=v.toString();});child.stderr.on('data',v=>{childOutput+=v.toString();});try{
-  await waitFor(async()=>({run:await db.run.findUniqueOrThrow({where:{id:r.id}}),requests:sandbox.stats().requests}),v=>v.run.status==='RUNNING'&&v.requests>before.requests,8000);
-  const exit=once(child,'exit');child.kill('SIGKILL');const [code,signal]=await exit;expect(signal).toBe('SIGKILL');expect(code).toBeNull();
-  const claimed=await db.run.findUniqueOrThrow({where:{id:r.id}});await pause(Math.max(0,claimed.leaseUntil!.getTime()-Date.now()+40));
-  expect(await reapExpired(db)).toBe(1);const result=await drain(r.id);expect(result.status).toBe('SUCCEEDED');expect(result.attemptCount).toBe(2);expect(result.attempts.map(a=>a.status)).toEqual(['WORKER_LOST','SUCCEEDED']);expect(sandbox.stats(r.id).tickets).toBe(1);
- }catch(e){throw new Error(`${(e as Error).message}; worker output: ${childOutput.slice(0,3000)}`);}finally{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');}});
- it('validates integration authorization, idempotency, and response contracts',async()=>{expect((await sandbox.app.inject({method:'POST',url:'/tickets',payload:{}})).statusCode).toBe(401);const headers={authorization:`Bearer ${process.env.SANDBOX_TOKEN}`,'idempotency-key':crypto.randomUUID(),'x-attempt':'1'};const payload={input:{message:'Real sandbox idempotency'},mode:'success',maxAttempts:3};const a=await sandbox.app.inject({method:'POST',url:'/tickets',headers,payload}),b=await sandbox.app.inject({method:'POST',url:'/tickets',headers,payload});expect(a.json().ticketId).toBe(b.json().ticketId);expect((await sandbox.app.inject({method:'POST',url:'/tickets',headers,payload:{...payload,input:{message:'Changed input'}}})).statusCode).toBe(409);expect((await sandbox.app.inject({method:'POST',url:'/tickets',headers,payload:{input:{message:'x'},mode:'unknown'}})).statusCode).toBe(400);});
- it('deduplicates simultaneous in-flight sandbox requests over HTTP',async()=>{const id=crypto.randomUUID(),headers={'content-type':'application/json',authorization:`Bearer ${process.env.SANDBOX_TOKEN}`,'idempotency-key':id,'x-attempt':'1'},body=JSON.stringify({input:{message:'Same delayed sandbox request'},mode:'slow',maxAttempts:3});const replies=await Promise.all([fetch(`${sandboxUrl}/tickets`,{method:'POST',headers,body}),fetch(`${sandboxUrl}/tickets`,{method:'POST',headers,body})]);const values=await Promise.all(replies.map(r=>r.json()));expect(values[0]).toEqual(values[1]);expect(sandbox.stats(id)).toEqual({requests:2,tickets:1});});
- it.each(['invalid-json','invalid-schema','oversized','redirect'])('rejects %s from an actual HTTP server',async mode=>{const bad=Fastify();bad.post('/tickets',async(_req,reply)=>{if(mode==='invalid-json')return reply.type('application/json').send('not-json');if(mode==='oversized')return reply.send({text:'x'.repeat(20000)});if(mode==='redirect')return reply.redirect('http://attacker.test');return {provider:'invented-ai'};});const url=await bad.listen({port:0,host:'127.0.0.1'});try{const r=await run();const outcome=await executeSandbox(r,url,process.env.SANDBOX_TOKEN!);expect(outcome.ok).toBe(false);if(!outcome.ok)expect(outcome.code).toBe(mode==='redirect'?'NETWORK_ERROR':'INVALID_RESPONSE');}finally{await bad.close();}});
- it('records a real connection failure without exposing credentials',async()=>{const r=await run();const outcome=await executeSandbox(r,'http://127.0.0.1:1',process.env.SANDBOX_TOKEN!);expect(outcome).toMatchObject({ok:false,code:'NETWORK_ERROR',retryable:true});expect(JSON.stringify(outcome)).not.toContain(process.env.SANDBOX_TOKEN!);});
+describe('approval, reliability, and real HTTP sandbox integration', () => {
+  it('makes no integration call before approval or after rejection', async () => {
+    const before = sandbox.stats().requests,
+      r = await run({ requiresApproval: true });
+    expect(await claimRun(db)).toBeNull();
+    await workerTick(db, sandboxUrl, process.env.SANDBOX_TOKEN!);
+    expect(sandbox.stats().requests).toBe(before);
+    await decideRun(db, owner, r.id, 'reject');
+    expect((await db.run.findUniqueOrThrow({ where: { id: r.id } })).status).toBe('REJECTED');
+    expect(await claimRun(db)).toBeNull();
+    expect(sandbox.stats().requests).toBe(before);
+    await expect(recoverRun(db, owner, r.id)).rejects.toMatchObject({ code: 'STATE_CONFLICT' });
+  });
+  it('approves once, executes actual HTTP integration, and persists a ticket', async () => {
+    const r = await run({ requiresApproval: true });
+    await decideRun(db, owner, r.id, 'approve');
+    await expect(decideRun(db, owner, r.id, 'approve')).rejects.toMatchObject({
+      code: 'STATE_CONFLICT',
+    });
+    const result = await drain(r.id);
+    expect(result.status).toBe('SUCCEEDED');
+    expect(result.output).toMatchObject({
+      category: 'billing',
+      priority: 'urgent',
+      provider: 'deterministic-sandbox',
+    });
+    expect(result.attempts).toHaveLength(1);
+  });
+  it('allows only one outcome for racing approval and rejection', async () => {
+    const r = await run({ requiresApproval: true });
+    const results = await Promise.allSettled([
+      decideRun(db, owner, r.id, 'approve'),
+      decideRun(db, owner, r.id, 'reject'),
+    ]);
+    expect(results.filter((v) => v.status === 'fulfilled')).toHaveLength(1);
+    expect(
+      await db.runEvent.count({ where: { runId: r.id, type: { in: ['APPROVED', 'REJECTED'] } } }),
+    ).toBe(1);
+  });
+  it('retries a real HTTP 503 and succeeds on attempt two', async () => {
+    const r = await run({ sandboxMode: 'flaky' }),
+      result = await drain(r.id);
+    expect(result.status).toBe('SUCCEEDED');
+    expect(result.attemptCount).toBe(2);
+    expect(result.attempts.map((a) => a.status)).toEqual(['FAILED', 'SUCCEEDED']);
+    expect(result.events.some((e) => e.type === 'RETRY_SCHEDULED')).toBe(true);
+  });
+  it('aborts real slow HTTP responses and stops at the attempt limit', async () => {
+    const r = await run({ sandboxMode: 'timeout', timeoutMs: 100, maxAttempts: 2 }),
+      result = await drain(r.id);
+    expect(result.status).toBe('FAILED');
+    expect(result.errorCode).toBe('TIMEOUT');
+    expect(result.attemptCount).toBe(2);
+    expect(result.attempts.every((a) => a.status === 'TIMED_OUT')).toBe(true);
+  });
+  it('does not retry a permanent HTTP 422 failure', async () => {
+    const r = await run({ sandboxMode: 'failure', maxAttempts: 5 }),
+      result = await drain(r.id);
+    expect(result.status).toBe('FAILED');
+    expect(result.attemptCount).toBe(1);
+    expect(result.errorCode).toBe('UPSTREAM_REJECTED');
+  });
+  it('recovers a failed run without changing its execution identity', async () => {
+    const r = await run({ sandboxMode: 'recoverable', maxAttempts: 2 });
+    const failed = await drain(r.id);
+    expect(failed.status).toBe('FAILED');
+    expect(failed.attemptCount).toBe(2);
+    const queued = await recoverRun(db, owner, r.id);
+    expect(queued.id).toBe(r.id);
+    const success = await drain(r.id);
+    expect(success.status).toBe('SUCCEEDED');
+    expect(success.attemptCount).toBe(3);
+    expect(success.recoveryCount).toBe(1);
+    expect(success.attempts).toHaveLength(3);
+  });
+  it('bounds manual recovery and rejects retries on successful runs', async () => {
+    const r = await run({ sandboxMode: 'failure' });
+    await drain(r.id);
+    for (let i = 0; i < 3; i++) {
+      await recoverRun(db, owner, r.id);
+      await drain(r.id);
+    }
+    await expect(recoverRun(db, owner, r.id)).rejects.toMatchObject({ code: 'STATE_CONFLICT' });
+    const good = await run();
+    await drain(good.id);
+    await expect(recoverRun(db, owner, good.id)).rejects.toMatchObject({ code: 'STATE_CONFLICT' });
+  });
+  it('prevents two simultaneous workers from claiming the same run', async () => {
+    const r = await run();
+    const claims = await Promise.all([claimRun(db), claimRun(db)]);
+    expect(claims.filter(Boolean)).toHaveLength(1);
+    expect(claims.find(Boolean)?.id).toBe(r.id);
+    expect(await db.attempt.count()).toBe(1);
+  });
+  it('fences expired ownership and reaps exhausted worker leases', async () => {
+    const r = await run({ maxAttempts: 1 }),
+      claimed = await claimRun(db);
+    expect(claimed).not.toBeNull();
+    const future = new Date(Date.now() + 60000);
+    expect(
+      await settleRun(db, claimed!, { ok: true, output: { ticketId: 'stale-result' } }, future),
+    ).toBe(false);
+    expect(await reapExpired(db, future)).toBe(1);
+    expect((await db.run.findUniqueOrThrow({ where: { id: r.id } })).status).toBe('FAILED');
+    expect((await db.attempt.findFirstOrThrow()).status).toBe('WORKER_LOST');
+  });
+  it('recovers after SIGKILL of a real worker process during an HTTP request', async () => {
+    const before = sandbox.stats(),
+      r = await run({ sandboxMode: 'slow', timeoutMs: 3000, maxAttempts: 3 });
+    let childOutput = '';
+    const child = spawn(process.execPath, ['--import', 'tsx', 'apps/api/src/worker-main.ts'], {
+      cwd: process.cwd(),
+      env: { ...process.env, SANDBOX_URL: sandboxUrl },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    child.stdout.on('data', (v) => {
+      childOutput += v.toString();
+    });
+    child.stderr.on('data', (v) => {
+      childOutput += v.toString();
+    });
+    try {
+      await waitFor(
+        async () => ({
+          run: await db.run.findUniqueOrThrow({ where: { id: r.id } }),
+          requests: sandbox.stats().requests,
+        }),
+        (v) => v.run.status === 'RUNNING' && v.requests > before.requests,
+        8000,
+      );
+      const exit = once(child, 'exit');
+      child.kill('SIGKILL');
+      const [code, signal] = await exit;
+      expect(signal).toBe('SIGKILL');
+      expect(code).toBeNull();
+      const claimed = await db.run.findUniqueOrThrow({ where: { id: r.id } });
+      await pause(Math.max(0, claimed.leaseUntil!.getTime() - Date.now() + 40));
+      expect(await reapExpired(db)).toBe(1);
+      const result = await drain(r.id);
+      expect(result.status).toBe('SUCCEEDED');
+      expect(result.attemptCount).toBe(2);
+      expect(result.attempts.map((a) => a.status)).toEqual(['WORKER_LOST', 'SUCCEEDED']);
+      expect(sandbox.stats(r.id).tickets).toBe(1);
+    } catch (e) {
+      throw new Error(`${(e as Error).message}; worker output: ${childOutput.slice(0, 3000)}`);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    }
+  });
+  it('validates integration authorization, idempotency, and response contracts', async () => {
+    expect(
+      (await sandbox.app.inject({ method: 'POST', url: '/tickets', payload: {} })).statusCode,
+    ).toBe(401);
+    const headers = {
+      authorization: `Bearer ${process.env.SANDBOX_TOKEN}`,
+      'idempotency-key': crypto.randomUUID(),
+      'x-attempt': '1',
+    };
+    const payload = {
+      input: { message: 'Real sandbox idempotency' },
+      mode: 'success',
+      maxAttempts: 3,
+    };
+    const a = await sandbox.app.inject({ method: 'POST', url: '/tickets', headers, payload }),
+      b = await sandbox.app.inject({ method: 'POST', url: '/tickets', headers, payload });
+    expect(a.json().ticketId).toBe(b.json().ticketId);
+    expect(
+      (
+        await sandbox.app.inject({
+          method: 'POST',
+          url: '/tickets',
+          headers,
+          payload: { ...payload, input: { message: 'Changed input' } },
+        })
+      ).statusCode,
+    ).toBe(409);
+    expect(
+      (
+        await sandbox.app.inject({
+          method: 'POST',
+          url: '/tickets',
+          headers,
+          payload: { input: { message: 'x' }, mode: 'unknown' },
+        })
+      ).statusCode,
+    ).toBe(400);
+  });
+  it('deduplicates simultaneous in-flight sandbox requests over HTTP', async () => {
+    const id = crypto.randomUUID(),
+      headers = {
+        'content-type': 'application/json',
+        authorization: `Bearer ${process.env.SANDBOX_TOKEN}`,
+        'idempotency-key': id,
+        'x-attempt': '1',
+      },
+      body = JSON.stringify({
+        input: { message: 'Same delayed sandbox request' },
+        mode: 'slow',
+        maxAttempts: 3,
+      });
+    const replies = await Promise.all([
+      fetch(`${sandboxUrl}/tickets`, { method: 'POST', headers, body }),
+      fetch(`${sandboxUrl}/tickets`, { method: 'POST', headers, body }),
+    ]);
+    const values = await Promise.all(replies.map((r) => r.json()));
+    expect(values[0]).toEqual(values[1]);
+    expect(sandbox.stats(id)).toEqual({ requests: 2, tickets: 1 });
+  });
+  it.each(['invalid-json', 'invalid-schema', 'oversized', 'redirect'])(
+    'rejects %s from an actual HTTP server',
+    async (mode) => {
+      const bad = Fastify();
+      bad.post('/tickets', async (_req, reply) => {
+        if (mode === 'invalid-json') return reply.type('application/json').send('not-json');
+        if (mode === 'oversized') return reply.send({ text: 'x'.repeat(20000) });
+        if (mode === 'redirect') return reply.redirect('http://attacker.test');
+        return { provider: 'invented-ai' };
+      });
+      const url = await bad.listen({ port: 0, host: '127.0.0.1' });
+      try {
+        const r = await run();
+        const outcome = await executeSandbox(r, url, process.env.SANDBOX_TOKEN!);
+        expect(outcome.ok).toBe(false);
+        if (!outcome.ok)
+          expect(outcome.code).toBe(mode === 'redirect' ? 'NETWORK_ERROR' : 'INVALID_RESPONSE');
+      } finally {
+        await bad.close();
+      }
+    },
+  );
+  it('records a real connection failure without exposing credentials', async () => {
+    const r = await run();
+    const outcome = await executeSandbox(r, 'http://127.0.0.1:1', process.env.SANDBOX_TOKEN!);
+    expect(outcome).toMatchObject({ ok: false, code: 'NETWORK_ERROR', retryable: true });
+    expect(JSON.stringify(outcome)).not.toContain(process.env.SANDBOX_TOKEN!);
+  });
 });

@@ -64,6 +64,7 @@ npx playwright install --with-deps chromium
 npm run test:e2e
 npm run security:secrets
 npm run security:audit
+npm run evidence:check
 ```
 
 For the restricted container:
@@ -76,19 +77,21 @@ node scripts/verify-local.mjs e2e
 
 The fallback browser is real Chromium from `@sparticuz/chromium`, with installed FFmpeg for recording. E2E starts the built frontend, API, database connection, worker, and sandbox. It drives the UI without mocking API responses.
 
+The local PGlite harness marks one database constraint-error case as native-only because its bridge does not reliably relay that error protocol to Prisma. That case is explicitly skipped locally and executed in the native PostgreSQL CI suite; this distinction is reported in the evidence counts.
+
 GitHub Actions checks native PostgreSQL integration, the production frontend build, desktop/mobile E2E, known secret patterns, and npm advisories. It uploads recordings/traces/reports for 14 days and packages reviewed source. It does not merge or deploy production.
 
 ## Layout
 
-| Path | Purpose |
-| --- | --- |
-| `apps/web` | Next.js UI and same-origin rewrite |
-| `apps/api/src` | Fastify, authentication, engine, worker, HTTP sandbox |
-| `packages/contracts` | Zod contracts and TypeScript UI types |
-| `prisma` | Schema, versioned SQL migrations, local seed |
-| `tests` | Unit, database/API/integration, browser E2E |
-| `scripts` | Verification, audits, local fallback |
-| `docs` | Evidence, architecture, limitations, selected screenshots |
-| `.github/workflows` | Verification and review artifact packaging |
+| Path                 | Purpose                                                   |
+| -------------------- | --------------------------------------------------------- |
+| `apps/web`           | Next.js UI and same-origin rewrite                        |
+| `apps/api/src`       | Fastify, authentication, engine, worker, HTTP sandbox     |
+| `packages/contracts` | Zod contracts and TypeScript UI types                     |
+| `prisma`             | Schema, versioned SQL migrations, local seed              |
+| `tests`              | Unit, database/API/integration, browser E2E               |
+| `scripts`            | Verification, audits, local fallback                      |
+| `docs`               | Evidence, architecture, limitations, selected screenshots |
+| `.github/workflows`  | Verification and review artifact packaging                |
 
 Current executed results are listed in the evidence index. A test's presence alone is not evidence that it passed.

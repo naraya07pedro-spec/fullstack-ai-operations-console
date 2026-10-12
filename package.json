@@ -29,7 +29,11 @@
     "security:audit": "node scripts/dependency-audit.mjs",
     "verify": "npm run typecheck && npm run test:coverage && npm run build --workspace apps/web && npm run test:e2e && npm run security:secrets && npm run security:audit",
     "db:local": "node scripts/local-db.mjs",
-    "setup:local": "node scripts/setup-local.mjs"
+    "setup:local": "node scripts/setup-local.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "evidence:summary": "node scripts/summarize-evidence.mjs",
+    "evidence:check": "node scripts/check-evidence.mjs"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
@@ -50,6 +54,7 @@
     "@vitest/coverage-v8": "^4.0.18",
     "concurrently": "^9.2.1",
     "magicast": "^0.3.5",
+    "prettier": "^3.6.2",
     "prisma": "6.19.3",
     "tsx": "^4.21.0",
     "typescript": "5.9.3",

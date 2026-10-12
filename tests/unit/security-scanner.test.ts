@@ -1,4 +1,26 @@
-import { it,expect } from 'vitest';
+import { it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-it('rejects a synthetic private key marker without printing the secret',()=>{const marker='-----BEGIN '+'PRIVATE KEY-----';const r=spawnSync(process.execPath,['scripts/scan-secrets.mjs','--stdin'],{input:marker,encoding:'utf8'});expect(r.status).toBe(1);expect(r.stderr).not.toContain(marker);});
-it('rejects synthetic GitHub tokens and permits environment placeholders',()=>{const token='ghp_'+'a'.repeat(36);const bad=spawnSync(process.execPath,['scripts/scan-secrets.mjs','--stdin'],{input:token,encoding:'utf8'});expect(bad.status).toBe(1);expect(bad.stderr).not.toContain(token);expect(spawnSync(process.execPath,['scripts/scan-secrets.mjs','--stdin'],{input:'SANDBOX_TOKEN=CHANGE_ME',encoding:'utf8'}).status).toBe(0);});
+it('rejects a synthetic private key marker without printing the secret', () => {
+  const marker = '-----BEGIN ' + 'PRIVATE KEY-----';
+  const r = spawnSync(process.execPath, ['scripts/scan-secrets.mjs', '--stdin'], {
+    input: marker,
+    encoding: 'utf8',
+  });
+  expect(r.status).toBe(1);
+  expect(r.stderr).not.toContain(marker);
+});
+it('rejects synthetic GitHub tokens and permits environment placeholders', () => {
+  const token = 'ghp_' + 'a'.repeat(36);
+  const bad = spawnSync(process.execPath, ['scripts/scan-secrets.mjs', '--stdin'], {
+    input: token,
+    encoding: 'utf8',
+  });
+  expect(bad.status).toBe(1);
+  expect(bad.stderr).not.toContain(token);
+  expect(
+    spawnSync(process.execPath, ['scripts/scan-secrets.mjs', '--stdin'], {
+      input: 'SANDBOX_TOKEN=CHANGE_ME',
+      encoding: 'utf8',
+    }).status,
+  ).toBe(0);
+});

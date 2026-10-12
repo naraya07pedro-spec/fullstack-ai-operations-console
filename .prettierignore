@@ -1,0 +1,13 @@
+node_modules/
+**/node_modules/
+**/.next/
+.git/
+.local/
+artifacts/
+test-results/
+playwright-report/
+docs/screenshots/*.png
+package-lock.json
+coverage/
+
+apps/web/next-env.d.ts
