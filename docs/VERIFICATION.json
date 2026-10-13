@@ -17,7 +17,7 @@
     "lines": 98.03
   },
   "dependencyAudit": { "info": 0, "low": 0, "moderate": 0, "high": 0, "critical": 0, "total": 0 },
-  "sourceTreeSha256": "53d1c731fc427a3c7915ed85b1f87be14a12758834fd2051ad8dce87a3358416",
+  "sourceTreeSha256": "64902bbd414e6d98f2fb6c70706fcbd4a8bae72db6ce1ed4a511047f9b8112ee",
   "sourceFiles": [
     {
       "path": ".dockerignore",
@@ -177,7 +177,7 @@
     },
     {
       "path": "scripts/container-smoke.mjs",
-      "sha256": "5332df931fbf0614a85cd57b1c32c5c98e02e85ba79181fbe6ae36967063a1d4"
+      "sha256": "8a43c1e25e4fe6a069bd3400ab5efe3380b4f2627211a939b554b7b29bd05a1c"
     },
     {
       "path": "scripts/dependency-audit.mjs",

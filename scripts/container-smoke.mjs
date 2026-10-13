@@ -11,7 +11,11 @@ function record(name) {
 async function request(path, { headers = {}, ...options } = {}) {
   return fetch(`${origin}${path}`, {
     ...options,
-    headers: { 'content-type': 'application/json', origin, ...headers },
+    headers: {
+      ...(options.body ? { 'content-type': 'application/json' } : {}),
+      origin,
+      ...headers,
+    },
     signal: AbortSignal.timeout(5000),
   });
 }
@@ -76,7 +80,7 @@ try {
   assert.equal((await request('/api/auth/me')).status, 401);
   record('same-origin rewrite reaches API and rejects unauthenticated access');
   const operator = await login('operator@example.test');
-  record('compiled API authenticates with a native PostgreSQL persisted session');
+  record('compiled API authenticates with a persisted database session');
   const workflow = await create(operator, {
     name: 'Container approval smoke',
     requiresApproval: true,
@@ -124,7 +128,7 @@ try {
     succeeded.events.some((e) => e.type === 'APPROVED'),
     true,
   );
-  record('approval runs real inter-container HTTP and persists ticket, attempt and events');
+  record('approval runs real HTTP and persists ticket, attempt and events');
 
   const rejected = await submit(
     operator,
@@ -205,7 +209,10 @@ try {
     JSON.stringify(
       {
         date: new Date().toISOString(),
-        runtime: 'Docker Compose / native PostgreSQL / compiled Node backend / standalone Next.js',
+        runtime:
+          process.env.LOCAL_PGLITE === '1'
+            ? 'Local PostgreSQL WASM fallback / compiled Node backend / standalone Next.js; no Docker'
+            : 'Docker Compose / native PostgreSQL / compiled Node backend / standalone Next.js',
         outcomes,
       },
       null,
