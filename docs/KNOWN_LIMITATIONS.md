@@ -29,4 +29,6 @@ Local database proof uses the actual PostgreSQL WASM/PGlite engine through a dev
 
 Browser evidence covers headless Chromium desktop/mobile emulation, keyboard, and reduced motion. Firefox, WebKit/Safari, physical devices, and broad accessibility certification are not claimed. CI recordings/traces/reports expire after 14 days and may require login; selected PNGs remain in Git.
 
+The local execution host has no Docker daemon or CLI. Actual container verification runs in the GitHub Actions Ubuntu runner; local checks compile the backend and drive the standalone frontend with the documented database fallback. The Compose demo publishes only host loopback, seeds synthetic accounts, and uses development API cookie configuration. It must not be exposed publicly as production. Node/PostgreSQL base-image tags are mutable; image-digest pinning and image-CVE scanning remain future release work.
+
 No production deployment or merge is authorized. Hosting credentials, production PostgreSQL, domain/TLS, supervision, monitoring/backups, provider credentials, and owner approval are required for production. This is a verified demonstration when linked checks pass, not a production-readiness assertion.

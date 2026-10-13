@@ -1,12 +1,14 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
+import { evidenceSourcePaths } from './evidence-sources.mjs';
 const sha = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
 const documents = [
   'README.md',
   ...readdirSync('docs')
     .filter((n) => n.endsWith('.md'))
     .map((n) => `docs/${n}`),
+  'docs/screenshots/README.md',
 ];
 let links = 0;
 for (const document of documents) {
@@ -20,6 +22,11 @@ for (const document of documents) {
   }
 }
 const report = JSON.parse(readFileSync('docs/VERIFICATION.json', 'utf8'));
+if (
+  JSON.stringify(report.sourceFiles.map((file) => file.path)) !==
+  JSON.stringify(evidenceSourcePaths())
+)
+  throw new Error('Evidence source inventory is incomplete or no longer matches the repository');
 for (const file of [...report.sourceFiles, ...report.screenshots])
   if (sha(file.path) !== file.sha256) throw new Error(`Evidence fingerprint differs: ${file.path}`);
 for (const state of [

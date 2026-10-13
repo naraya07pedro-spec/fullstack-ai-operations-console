@@ -18,7 +18,9 @@
     "dev:sandbox": "node --env-file-if-exists=.env --import tsx apps/api/src/sandbox-main.ts",
     "dev:web": "node --env-file-if-exists=.env node_modules/next/dist/bin/next dev apps/web --hostname 0.0.0.0 --port 3000",
     "build": "npm run typecheck && npm run build --workspace apps/web",
+    "build:runtime": "tsc -p tsconfig.runtime.json",
     "typecheck": "tsc --noEmit && npm run typecheck --workspace apps/web",
+    "lint": "eslint apps packages prisma tests scripts *.ts",
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
     "db:seed": "node --env-file-if-exists=.env --import tsx prisma/seed.ts",
@@ -46,6 +48,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.9",
     "@electric-sql/pglite-socket": "^0.2.12",
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.58.2",
     "@sparticuz/chromium": "^153.0.0",
     "@types/node": "^22.19.0",
@@ -53,11 +56,14 @@
     "@types/react-dom": "^19.2.0",
     "@vitest/coverage-v8": "^4.0.18",
     "concurrently": "^9.2.1",
+    "eslint": "^10.12.0",
+    "globals": "^17.13.0",
     "magicast": "^0.3.5",
     "prettier": "^3.6.2",
     "prisma": "6.19.3",
     "tsx": "^4.21.0",
     "typescript": "5.9.3",
+    "typescript-eslint": "^8.71.2",
     "vitest": "^4.0.18"
   },
   "overrides": {

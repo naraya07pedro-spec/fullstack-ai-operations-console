@@ -43,3 +43,7 @@ The integration URL is server configuration. User input cannot choose hosts; red
 `Attempt` has unique `(runId, number)`. `RunEvent` records decisions, execution, retries, outcomes, lease expiry, and recovery. These transactional records remain editable by database administrators; they are not an immutable ledger.
 
 SQL migrations enforce foreign keys, uniqueness, attempt/timeout bounds, lease-state consistency, successful output, and approval gating. Native PostgreSQL is the standard/CI runtime. Local evidence separately identifies the PostgreSQL WASM/PGlite fallback and its different concurrency semantics.
+
+## Container boundary
+
+The [Compose configuration](../compose.yaml) preserves these process boundaries. The backend is compiled to JavaScript; the frontend uses Next.js standalone tracing. A one-shot tools container applies migrations and seeds synthetic accounts before the API and worker start. Internal service DNS connects API/worker to PostgreSQL and worker to sandbox. Only the frontend is published on host loopback. All application containers run as a non-root user. [Container and release instructions](DEPLOYMENT.md) describe the local demo scope.

@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { evidenceSourcePaths } from './evidence-sources.mjs';
 const read = (p) => JSON.parse(readFileSync(p, 'utf8'));
 const unit = read('artifacts/test-results.json'),
   e2e = read('artifacts/e2e-results.json'),
@@ -18,13 +18,7 @@ if (
     'Failed, flaky, skipped browser checks or dependency advisories cannot be summarized as verified',
   );
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
-const candidates = execFileSync(
-  'git',
-  ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
-  { encoding: 'utf8' },
-)
-  .split('\0')
-  .filter(Boolean);
+const candidates = evidenceSourcePaths();
 const unitReportTime = statSync('artifacts/test-results.json').mtimeMs;
 const browserReportTime = statSync('artifacts/e2e-results.json').mtimeMs;
 for (const path of [...new Set(candidates)]) {
@@ -38,15 +32,7 @@ for (const path of [...new Set(candidates)]) {
   )
     throw new Error(`Test report predates changed source: ${path}`);
 }
-const sourceFiles = [...new Set(candidates)]
-  .filter((p) =>
-    /^(apps\/|packages\/|prisma\/|tests\/|scripts\/|\.github\/workflows\/|package(?:-lock)?\.json|tsconfig\.json|(?:vitest\.config|playwright\.config)\.ts)/.test(
-      p,
-    ),
-  )
-  .filter((p) => p !== 'apps/web/next-env.d.ts')
-  .sort()
-  .map((path) => ({ path, sha256: sha(readFileSync(path)) }));
+const sourceFiles = candidates.map((path) => ({ path, sha256: sha(readFileSync(path)) }));
 const screenshots = readdirSync('docs/screenshots')
   .filter((n) => n.endsWith('.png'))
   .sort()

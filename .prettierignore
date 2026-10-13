@@ -9,5 +9,6 @@ playwright-report/
 docs/screenshots/*.png
 package-lock.json
 coverage/
+dist/
 
 apps/web/next-env.d.ts

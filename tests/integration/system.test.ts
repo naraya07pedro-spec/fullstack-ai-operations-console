@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, afterEach, afterAll, describe, it, expect } from 'vitest';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import Fastify from 'fastify';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
@@ -609,7 +609,9 @@ describe('approval, reliability, and real HTTP sandbox integration', () => {
       expect(result.attempts.map((a) => a.status)).toEqual(['WORKER_LOST', 'SUCCEEDED']);
       expect(sandbox.stats(r.id).tickets).toBe(1);
     } catch (e) {
-      throw new Error(`${(e as Error).message}; worker output: ${childOutput.slice(0, 3000)}`);
+      throw new Error(`${(e as Error).message}; worker output: ${childOutput.slice(0, 3000)}`, {
+        cause: e,
+      });
     } finally {
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
     }

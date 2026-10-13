@@ -6,7 +6,7 @@ The integration is an explicit **deterministic sandbox** for support-request cla
 
 ## Review
 
-[Evidence index](docs/EVIDENCE.md) · [Case study](docs/PORTFOLIO_CASE_STUDY.md) · [Architecture](docs/ARCHITECTURE.md) · [API](docs/API.md) · [Decisions](docs/DECISIONS.md) · [Limitations](docs/KNOWN_LIMITATIONS.md)
+[Evidence index](docs/EVIDENCE.md) · [Case study](docs/PORTFOLIO_CASE_STUDY.md) · [Architecture](docs/ARCHITECTURE.md) · [API](docs/API.md) · [Decisions](docs/DECISIONS.md) · [Container setup and release boundary](docs/DEPLOYMENT.md) · [Limitations](docs/KNOWN_LIMITATIONS.md)
 
 ## Behavior
 
@@ -51,13 +51,28 @@ node scripts/verify-local.mjs dev
 
 The setup command creates ignored `.env` and `.env.test` with random credentials and separate local database ports. Read `DEMO_PASSWORD` privately from `.env`. It refuses to overwrite existing environments. The harness keeps services and checks in one parent network namespace.
 
+## Docker review stack
+
+Requires Docker Engine and Compose v2. This is a loopback-only local demonstration with a built standalone Next.js frontend, compiled Node.js API/worker/sandbox, native PostgreSQL, migrations and synthetic demo accounts.
+
+```bash
+node scripts/setup-containers.mjs
+docker compose --env-file .env.docker up --build --detach --wait --wait-timeout 180
+node --env-file=.env.docker scripts/container-smoke.mjs
+```
+
+Open `http://localhost:3000`. Read the password privately from ignored `.env.docker`. Only the frontend port is published, on `127.0.0.1`. Stop the demo with `docker compose --env-file .env.docker down`; this preserves its database volume. Details, browser reproduction and production prerequisites are in [DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 ## Checks
 
 Integration tests **truncate the configured test database**. Use a disposable database and set `ALLOW_TEST_DB_RESET=1`. Never point tests at production. `.env.test` is loaded for unit/integration checks.
 
 ```bash
 npm run typecheck
+npm run lint
+npm run format:check
 npm run test:coverage
+npm run build:runtime
 npm run build --workspace apps/web
 npm run db:seed
 npx playwright install --with-deps chromium
@@ -79,19 +94,20 @@ The fallback browser is real Chromium from `@sparticuz/chromium`, with installed
 
 The local PGlite harness marks one database constraint-error case as native-only because its bridge does not reliably relay that error protocol to Prisma. That case is explicitly skipped locally and executed in the native PostgreSQL CI suite; this distinction is reported in the evidence counts.
 
-GitHub Actions checks native PostgreSQL integration, the production frontend build, desktop/mobile E2E, known secret patterns, and npm advisories. It uploads recordings/traces/reports for 14 days and packages reviewed source. It does not merge or deploy production.
+GitHub Actions checks formatting, ESLint, strict types, native PostgreSQL integration, compiled backend and standalone frontend builds, desktop/mobile E2E, known secret patterns, and npm advisories. A separate container job builds and runs the Compose stack, executes HTTP smoke checks and runs the same browser suite against those containers. Generated CI credentials are masked before entering later step environments. Recordings/traces/reports have 14-day retention; reviewed source is packaged for approval. No workflow merges or deploys production.
 
 ## Layout
 
-| Path                 | Purpose                                                   |
-| -------------------- | --------------------------------------------------------- |
-| `apps/web`           | Next.js UI and same-origin rewrite                        |
-| `apps/api/src`       | Fastify, authentication, engine, worker, HTTP sandbox     |
-| `packages/contracts` | Zod contracts and TypeScript UI types                     |
-| `prisma`             | Schema, versioned SQL migrations, local seed              |
-| `tests`              | Unit, database/API/integration, browser E2E               |
-| `scripts`            | Verification, audits, local fallback                      |
-| `docs`               | Evidence, architecture, limitations, selected screenshots |
-| `.github/workflows`  | Verification and review artifact packaging                |
+| Path                         | Purpose                                                   |
+| ---------------------------- | --------------------------------------------------------- |
+| `apps/web`                   | Next.js UI and same-origin rewrite                        |
+| `apps/api/src`               | Fastify, authentication, engine, worker, HTTP sandbox     |
+| `packages/contracts`         | Zod contracts and TypeScript UI types                     |
+| `prisma`                     | Schema, versioned SQL migrations, local seed              |
+| `tests`                      | Unit, database/API/integration, browser E2E               |
+| `scripts`                    | Verification, audits, local fallback                      |
+| `Dockerfile`, `compose.yaml` | Isolated local review stack and build targets             |
+| `docs`                       | Evidence, architecture, limitations, selected screenshots |
+| `.github/workflows`          | Verification and review artifact packaging                |
 
 Current executed results are listed in the evidence index. A test's presence alone is not evidence that it passed.

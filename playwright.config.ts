@@ -60,30 +60,33 @@ export default defineConfig({
       },
     },
   ],
-  webServer: [
-    {
-      command: 'npm run dev:api',
-      url: 'http://127.0.0.1:4000/health',
-      reuseExistingServer: false,
-      timeout: 60000,
-    },
-    {
-      command: 'npm run dev:sandbox',
-      url: 'http://127.0.0.1:4100/health',
-      reuseExistingServer: false,
-      timeout: 60000,
-    },
-    {
-      command: 'npm run dev:worker',
-      url: 'http://127.0.0.1:4200/health',
-      reuseExistingServer: false,
-      timeout: 60000,
-    },
-    {
-      command: 'npm run start --workspace apps/web',
-      url: 'http://localhost:3000',
-      reuseExistingServer: false,
-      timeout: 60000,
-    },
-  ],
+  webServer:
+    process.env.E2E_EXTERNAL_SERVICES === '1'
+      ? []
+      : [
+          {
+            command: 'npm run dev:api',
+            url: 'http://127.0.0.1:4000/health',
+            reuseExistingServer: false,
+            timeout: 60000,
+          },
+          {
+            command: 'npm run dev:sandbox',
+            url: 'http://127.0.0.1:4100/health',
+            reuseExistingServer: false,
+            timeout: 60000,
+          },
+          {
+            command: 'npm run dev:worker',
+            url: 'http://127.0.0.1:4200/health',
+            reuseExistingServer: false,
+            timeout: 60000,
+          },
+          {
+            command: 'npm run start --workspace apps/web',
+            url: 'http://localhost:3000',
+            reuseExistingServer: false,
+            timeout: 60000,
+          },
+        ],
 });

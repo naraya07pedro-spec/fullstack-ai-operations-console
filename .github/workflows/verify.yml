@@ -37,12 +37,14 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Generate ephemeral sandbox credentials
-        run: |
-          node -e "const c=require('crypto'),f=require('fs');f.appendFileSync(process.env.GITHUB_ENV, 'SANDBOX_TOKEN='+c.randomBytes(32).toString('hex')+'\nDEMO_PASSWORD='+c.randomBytes(24).toString('base64url')+'\n')"
+        run: node scripts/ci-credentials.mjs
       - run: npm ci
       - run: npm run db:generate
       - run: npm run db:migrate
+      - run: npm run format:check
+      - run: npm run lint
       - run: npm run typecheck
+      - run: npm run build:runtime
       - run: npm run test:coverage
       - run: npm run db:seed
       - run: npm run build --workspace apps/web
@@ -65,3 +67,43 @@ jobs:
           if-no-files-found: error
       - name: Review boundary
         run: echo "Verification and source packaging only. Production deployment requires owner approval and a configured host."
+  containers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      E2E_EXTERNAL_SERVICES: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Generate and mask ephemeral container credentials
+        run: node scripts/ci-credentials.mjs --containers
+      - run: npm ci
+      - name: Validate Compose configuration without printing secrets
+        run: docker compose --env-file .env.docker config --quiet
+      - name: Build and start isolated local review stack
+        run: docker compose --env-file .env.docker up --build --detach --wait --wait-timeout 180
+      - name: Execute compiled-container integration smoke checks
+        run: node scripts/container-smoke.mjs
+      - run: npx playwright install --with-deps chromium
+      - name: Drive standalone frontend against container API, database and worker
+        run: npm run test:e2e
+      - name: Collect service status and sanitized logs
+        if: always()
+        run: node scripts/collect-container-evidence.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: container-evidence-${{ github.sha }}
+          path: |
+            artifacts/
+            test-results/
+            playwright-report/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Remove only the disposable CI stack
+        if: always()
+        run: docker compose --env-file .env.docker down --volumes
