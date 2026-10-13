@@ -12,7 +12,9 @@ The engineering boundaries are concrete: persisted sessions and owner checks; op
 
 ## Proof
 
-An inspected native PostgreSQL CI run passed 55 unit/API/database/reliability checks and 10 browser checks. Sixteen authentic screenshots and a recorded workflow walkthrough accompany the source. The [evidence index](EVIDENCE.md) links demonstrated behavior to named tests, executed results, CI runs, and authentic screenshots. Unit checks cover contracts/credentials. Database/API cases cover ownership, rollback, concurrent admission, state transitions, real HTTP failures/timeouts, and process death. Browser tests drive the built UI against the running backend/database/worker/sandbox, with desktop/mobile recordings and selected states.
+The inspected native PostgreSQL CI job passed **58/58 unit/API/database/authorization/reliability/security checks** and **10/10 desktop/mobile browser cases**, with zero skips or flakes. An independent Docker job built the compiled backend and standalone frontend, started healthy PostgreSQL/API/worker/sandbox/web services, then passed **10/10 HTTP smoke checks and 10/10 browser cases**. The [evidence index](EVIDENCE.md) and [inspected CI summary](CI_VERIFICATION.json) link these claims to exact runs, reports, artifact digests, source fingerprints and authentic captures.
+
+Unit checks cover contracts, passwords, credential masking and log redaction. Database/API cases cover ownership, rollback, concurrent admission, state transitions, real HTTP failures/timeouts, and process death. Browser checks drive the built UI against real services on desktop/mobile. Sixteen selected screenshots and authentic local/native/Docker workflow recordings demonstrate configuration, approval, rejection, failure and recovery.
 
 Screenshots document configuration, waiting approval, successful output, failures, rejection, and recovery of the same execution. Reports and videos stay in CI artifacts instead of bulky source binaries.
 
