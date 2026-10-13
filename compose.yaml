@@ -1,0 +1,135 @@
+name: operations-console-demo
+
+x-build: &build
+  context: .
+  args:
+    API_URL: http://api:4000
+
+x-environment: &environment
+  DATABASE_URL: postgresql://console:${POSTGRES_PASSWORD:?Generate .env.docker first}@postgres:5432/console_demo
+  APP_ORIGIN: http://localhost:3000
+  SANDBOX_URL: http://sandbox:4100
+  SANDBOX_TOKEN: ${SANDBOX_TOKEN:?Generate .env.docker first}
+  NODE_ENV: development
+
+x-runtime: &runtime
+  image: operations-console-runtime:local
+  build:
+    <<: *build
+    target: runtime
+  init: true
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: console
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate .env.docker first}
+      POSTGRES_DB: console_demo
+    volumes:
+      - console-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U console -d console_demo']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  bootstrap:
+    image: operations-console-tools:local
+    build:
+      <<: *build
+      target: tools
+    environment:
+      <<: *environment
+      DEMO_PASSWORD: ${DEMO_PASSWORD:?Generate .env.docker first}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *runtime
+    environment:
+      <<: *environment
+      API_HOST: 0.0.0.0
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          'fetch("http://127.0.0.1:4000/health").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))',
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  sandbox:
+    <<: *runtime
+    command: ['node', 'dist/apps/api/src/sandbox-main.js']
+    environment:
+      <<: *environment
+      SANDBOX_HOST: 0.0.0.0
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          'fetch("http://127.0.0.1:4100/health").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))',
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  worker:
+    <<: *runtime
+    command: ['node', 'dist/apps/api/src/worker-main.js']
+    environment: *environment
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      sandbox:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          'fetch("http://127.0.0.1:4200/health").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))',
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  web:
+    image: operations-console-web:local
+    build:
+      <<: *build
+      target: web
+    init: true
+    ports:
+      - '127.0.0.1:3000:3000'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          'fetch("http://127.0.0.1:3000/").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))',
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+volumes:
+  console-data:

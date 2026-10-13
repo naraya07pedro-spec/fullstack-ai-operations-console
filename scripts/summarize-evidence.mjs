@@ -1,0 +1,93 @@
+import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { evidenceSourcePaths } from './evidence-sources.mjs';
+import { format, resolveConfig } from 'prettier';
+const read = (p) => JSON.parse(readFileSync(p, 'utf8'));
+const unit = read('artifacts/test-results.json'),
+  e2e = read('artifacts/e2e-results.json'),
+  coverage = read('artifacts/coverage/coverage-summary.json'),
+  audit = read('artifacts/dependency-audit.json');
+if (
+  unit.numFailedTests ||
+  !unit.success ||
+  e2e.stats.unexpected ||
+  e2e.stats.flaky ||
+  e2e.stats.skipped ||
+  audit.metadata.vulnerabilities.total
+)
+  throw new Error(
+    'Failed, flaky, skipped browser checks or dependency advisories cannot be summarized as verified',
+  );
+const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const candidates = evidenceSourcePaths();
+const unitReportTime = statSync('artifacts/test-results.json').mtimeMs;
+const browserReportTime = statSync('artifacts/e2e-results.json').mtimeMs;
+for (const path of [...new Set(candidates)]) {
+  if (path === 'apps/web/next-env.d.ts') continue;
+  const unitSource =
+    /^(apps\/api\/|packages\/|prisma\/|tests\/(unit|integration)\/|vitest\.config)/.test(path);
+  const browserSource = /^(apps\/|packages\/|tests\/e2e\/|playwright\.config)/.test(path);
+  if (
+    (unitSource && statSync(path).mtimeMs > unitReportTime) ||
+    (browserSource && statSync(path).mtimeMs > browserReportTime)
+  )
+    throw new Error(`Test report predates changed source: ${path}`);
+}
+const sourceFiles = candidates.map((path) => ({ path, sha256: sha(readFileSync(path)) }));
+const screenshots = readdirSync('docs/screenshots')
+  .filter((n) => n.endsWith('.png'))
+  .sort()
+  .map((name) => {
+    const bytes = readFileSync(`docs/screenshots/${name}`);
+    return {
+      path: `docs/screenshots/${name}`,
+      sha256: sha(bytes),
+      bytes: bytes.length,
+      width: bytes.readUInt32BE(16),
+      height: bytes.readUInt32BE(20),
+    };
+  });
+const result = {
+  date: new Date(unit.startTime).toISOString(),
+  scope:
+    'Local executed proof. Native PostgreSQL results and exact CI commit are indexed separately in EVIDENCE.md.',
+  database: 'PostgreSQL WASM / PGlite development fallback',
+  tests: {
+    passed: unit.numPassedTests,
+    failed: unit.numFailedTests,
+    nativeOnlySkipped: unit.numPendingTests,
+  },
+  browser: {
+    passed: e2e.stats.expected,
+    failed: e2e.stats.unexpected,
+    flaky: e2e.stats.flaky,
+    projects: e2e.config.projects.map((p) => p.name),
+  },
+  coverage: {
+    scope:
+      'Selected API/auth/config/engine/errors/sandbox and shared contract source; excludes frontend and process launchers',
+    statements: coverage.total.statements.pct,
+    branches: coverage.total.branches.pct,
+    functions: coverage.total.functions.pct,
+    lines: coverage.total.lines.pct,
+  },
+  dependencyAudit: audit.metadata.vulnerabilities,
+  sourceTreeSha256: sha(JSON.stringify(sourceFiles)),
+  sourceFiles,
+  screenshots,
+};
+writeFileSync(
+  'docs/VERIFICATION.json',
+  await format(JSON.stringify(result), {
+    ...(await resolveConfig('docs/VERIFICATION.json')),
+    parser: 'json',
+  }),
+);
+console.log(
+  JSON.stringify({
+    tests: result.tests,
+    browser: result.browser,
+    screenshots: screenshots.length,
+    sourceTreeSha256: result.sourceTreeSha256,
+  }),
+);

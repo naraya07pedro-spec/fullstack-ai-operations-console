@@ -142,6 +142,14 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
+# Local database, browser recordings, and disposable reports
+.local/
+test-results/
+playwright-report/
+artifacts/
+*.webm
+*.mp4
+
 # Astro generated types
 .astro/
 

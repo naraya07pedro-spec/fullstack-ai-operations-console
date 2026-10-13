@@ -1,0 +1,109 @@
+name: Verify and package evidence
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: console
+          POSTGRES_PASSWORD: ci-only-database-password
+          POSTGRES_DB: console_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U console -d console_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://console:ci-only-database-password@127.0.0.1:5432/console_test
+      APP_ORIGIN: http://localhost:3000
+      SANDBOX_URL: http://127.0.0.1:4100
+      ALLOW_TEST_DB_RESET: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Generate ephemeral sandbox credentials
+        run: node scripts/ci-credentials.mjs
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run db:migrate
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build:runtime
+      - run: npm run test:coverage
+      - run: npm run db:seed
+      - run: npm run build --workspace apps/web
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - run: npm run security:secrets
+      - run: npm run security:audit
+      - run: npm run evidence:check
+      - name: Package reviewed source for release preparation
+        run: git archive --format=tar.gz --output=artifacts/reviewed-source.tar.gz HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: engineering-evidence-${{ github.sha }}
+          path: |
+            artifacts/
+            test-results/
+            playwright-report/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Review boundary
+        run: echo "Verification and source packaging only. Production deployment requires owner approval and a configured host."
+  containers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      E2E_EXTERNAL_SERVICES: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Generate and mask ephemeral container credentials
+        run: node scripts/ci-credentials.mjs --containers
+      - run: npm ci
+      - name: Validate Compose configuration without printing secrets
+        run: docker compose --env-file .env.docker config --quiet
+      - name: Build and start isolated local review stack
+        run: docker compose --env-file .env.docker up --build --detach --wait --wait-timeout 180
+      - name: Execute compiled-container integration smoke checks
+        run: node scripts/container-smoke.mjs
+      - run: npx playwright install --with-deps chromium
+      - name: Drive standalone frontend against container API, database and worker
+        run: npm run test:e2e
+      - name: Collect service status and sanitized logs
+        if: always()
+        run: node scripts/collect-container-evidence.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: container-evidence-${{ github.sha }}
+          path: |
+            artifacts/
+            test-results/
+            playwright-report/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Remove only the disposable CI stack
+        if: always()
+        run: docker compose --env-file .env.docker down --volumes

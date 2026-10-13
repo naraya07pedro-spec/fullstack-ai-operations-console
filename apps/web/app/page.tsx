@@ -1,0 +1,1195 @@
+'use client';
+import { useCallback, useEffect, useState, useRef, FormEvent } from 'react';
+import { workflowSchema, type Workflow, type WorkflowInput, type Run } from '@console/contracts';
+
+type View = 'dashboard' | 'workflows' | 'executions' | 'approvals' | 'editor';
+type User = { id: string; email: string; role: 'OPERATOR' | 'VIEWER' };
+type Dashboard = { workflowCount: number; counts: Record<Run['status'], number>; recent: Run[] };
+const labels: Record<Run['status'], string> = {
+  WAITING_APPROVAL: 'Awaiting approval',
+  QUEUED: 'Queued',
+  RUNNING: 'Running',
+  SUCCEEDED: 'Succeeded',
+  FAILED: 'Failed',
+  REJECTED: 'Rejected',
+};
+const modeLabels: Record<WorkflowInput['sandboxMode'], string> = {
+  success: 'Healthy response',
+  flaky: 'Transient failure → automatic retry',
+  recoverable: 'Unavailable → manual recovery',
+  timeout: 'Timeout on every attempt',
+  failure: 'Permanent validation failure',
+  slow: 'Slow response (1.5 seconds)',
+};
+const date = (v: string) =>
+  new Date(v).toLocaleString('en-GB', {
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+const blank: WorkflowInput = {
+  name: '',
+  description: '',
+  requiresApproval: true,
+  maxAttempts: 3,
+  timeoutMs: 3000,
+  sandboxMode: 'success',
+};
+function Status({ status }: { status: Run['status'] }) {
+  return (
+    <span className={`status status-${status.toLowerCase()}`}>
+      <i />
+      {labels[status]}
+    </span>
+  );
+}
+
+export default function Console() {
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const queryGeneration = useRef('');
+  const identity = useRef<string | null>(null),
+    sessionToken = useRef('');
+  const [booting, setBooting] = useState(true),
+    [user, setUser] = useState<User | null>(null),
+    [csrf, setCsrf] = useState('');
+  const [view, setView] = useState<View>('dashboard'),
+    [error, setError] = useState(''),
+    [busy, setBusy] = useState(false),
+    [loading, setLoading] = useState(false);
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null),
+    [workflows, setWorkflows] = useState<Workflow[]>([]),
+    [runs, setRuns] = useState<Run[]>([]);
+  const [detail, setDetail] = useState<Run | null>(null),
+    [edit, setEdit] = useState<Workflow | null>(null),
+    [draft, setDraft] = useState<WorkflowInput>(blank);
+  const [runWorkflow, setRunWorkflow] = useState<Workflow | null>(null),
+    [message, setMessage] = useState(''),
+    [runKey, setRunKey] = useState('');
+  const [email, setEmail] = useState('operator@example.test'),
+    [password, setPassword] = useState('');
+  identity.current = user?.id ?? null;
+  sessionToken.current = csrf;
+  const [pendingRuns, setPendingRuns] = useState<Run[]>([]),
+    [pendingNext, setPendingNext] = useState<string | null>(null);
+  const [pageCursor, setPageCursor] = useState<string | null>(null),
+    [approvalCursor, setApprovalCursor] = useState<string | null>(null);
+  const [filter, setFilter] = useState('ALL'),
+    [cursor, setCursor] = useState<string | null>(null),
+    [notice, setNotice] = useState('');
+  const request = useCallback(
+    async <T,>(path: string, options: RequestInit = {}): Promise<T> => {
+      const response = await fetch(`/api${path}`, {
+        ...options,
+        headers: {
+          ...(options.body ? { 'content-type': 'application/json' } : {}),
+          ...(options.method && options.method !== 'GET' ? { 'x-csrf-token': csrf } : {}),
+          ...options.headers,
+        },
+        credentials: 'same-origin',
+        cache: 'no-store',
+      });
+      const data = await response
+        .json()
+        .catch(() => ({ message: 'Server returned an unreadable response' }));
+      if (response.status === 401 && path !== '/auth/login' && sessionToken.current === csrf) {
+        setUser(null);
+        setCsrf('');
+        setDashboard(null);
+        setWorkflows([]);
+        setRuns([]);
+        setDetail(null);
+      }
+      if (!response.ok) throw new Error(data.message ?? `Request failed (${response.status})`);
+      return data as T;
+    },
+    [csrf],
+  );
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then(async (r) => {
+        if (r.ok) {
+          const d = await r.json();
+          if (active) {
+            setUser(d.user);
+            setCsrf(d.csrfToken);
+          }
+        } else if (r.status !== 401 && active)
+          setError('Could not reach the API. Start the backend and database, then reload.');
+      })
+      .catch(() => {
+        if (active)
+          setError('Could not reach the API. Start the backend and database, then reload.');
+      })
+      .finally(() => {
+        if (active) setBooting(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  queryGeneration.current = `${csrf}:${pageCursor ?? ''}:${approvalCursor ?? ''}:${filter}`;
+  const refresh = useCallback(async () => {
+    const generation = `${csrf}:${pageCursor ?? ''}:${approvalCursor ?? ''}:${filter}`;
+    const current = identity.current;
+    const [d, w, r, p] = await Promise.all([
+      request<Dashboard>('/dashboard'),
+      request<{ items: Workflow[] }>('/workflows'),
+      request<{ items: Run[]; nextCursor: string | null }>(
+        `/runs?limit=30${filter !== 'ALL' ? `&status=${filter}` : ''}${pageCursor ? `&cursor=${pageCursor}` : ''}`,
+      ),
+      request<{ items: Run[]; nextCursor: string | null }>(
+        `/runs?status=WAITING_APPROVAL&limit=50${approvalCursor ? `&cursor=${approvalCursor}` : ''}`,
+      ),
+    ]);
+    if (identity.current !== current || queryGeneration.current !== generation) return;
+    setDashboard(d);
+    setWorkflows(w.items);
+    setRuns(r.items);
+    setCursor(r.nextCursor);
+    setPendingRuns(p.items);
+    setPendingNext(p.nextCursor);
+  }, [request, pageCursor, approvalCursor, csrf, filter]);
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    setLoading(true);
+    refresh()
+      .catch((e) => {
+        if (active) setError(e.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    const interval = setInterval(
+      () =>
+        refresh().catch((e) => {
+          if (active) setError(e.message);
+        }),
+      1500,
+    );
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [user, refresh]);
+  const detailId = detail?.id;
+  useEffect(() => {
+    if (!detailId || !user) return;
+    let active = true;
+    const interval = setInterval(
+      () =>
+        request<Run>(`/runs/${detailId}`)
+          .then((d) => {
+            if (active) setDetail(d);
+          })
+          .catch((e) => {
+            if (active) setError(e.message);
+          }),
+      1000,
+    );
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [detailId, user, request]);
+  useEffect(() => {
+    if (!runWorkflow) return;
+    const original = returnFocus.current;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !busy) setRunWorkflow(null);
+      if (e.key === 'Tab') {
+        const elements = Array.from(
+          document.querySelectorAll<HTMLElement>(
+            '[role="dialog"] button:not(:disabled), [role="dialog"] textarea',
+          ),
+        );
+        const first = elements[0],
+          last = elements.at(-1);
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      original?.focus();
+    };
+  }, [runWorkflow, busy]);
+  async function mutate<T>(action: () => Promise<T>, success?: (value: T) => void) {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await action();
+      success?.(result);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+  function navigate(v: View) {
+    if (v === 'executions') setPageCursor(null);
+    if (v === 'approvals') setApprovalCursor(null);
+    setView(v);
+    setDetail(null);
+    setError('');
+    setNotice('');
+  }
+  async function showRun(id: string) {
+    setError('');
+    try {
+      setDetail(await request<Run>(`/runs/${id}`));
+      setView('executions');
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  async function login(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const d = await request<{ user: User; csrfToken: string }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      setUser(d.user);
+      setCsrf(d.csrfToken);
+      setPassword('');
+      setView('dashboard');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function logout() {
+    setBusy(true);
+    try {
+      await request('/auth/logout', { method: 'POST' });
+      setUser(null);
+      setCsrf('');
+      setDetail(null);
+      setRuns([]);
+      setWorkflows([]);
+      setDashboard(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  function openEditor(w?: Workflow) {
+    setEdit(w ?? null);
+    setDraft(
+      w
+        ? {
+            name: w.name,
+            description: w.description,
+            requiresApproval: w.requiresApproval,
+            maxAttempts: w.maxAttempts,
+            timeoutMs: w.timeoutMs,
+            sandboxMode: w.sandboxMode,
+          }
+        : { ...blank },
+    );
+    navigate('editor');
+  }
+  function saveWorkflow(e: FormEvent) {
+    e.preventDefault();
+    const parsed = workflowSchema.safeParse(draft);
+    if (!parsed.success) {
+      setError(parsed.error.issues[0].message);
+      return;
+    }
+    void mutate(
+      () =>
+        request<Workflow>(edit ? `/workflows/${edit.id}` : '/workflows', {
+          method: edit ? 'PATCH' : 'POST',
+          body: JSON.stringify(edit ? { ...parsed.data, version: edit.version } : parsed.data),
+        }),
+      () => {
+        navigate('workflows');
+        setNotice(
+          edit
+            ? 'Workflow updated. Existing runs keep their original version.'
+            : 'Workflow created. Ready to execute.',
+        );
+      },
+    );
+  }
+  function openExecute(w: Workflow) {
+    returnFocus.current = document.activeElement as HTMLElement;
+    setRunWorkflow(w);
+    setMessage('');
+    setRunKey(crypto.randomUUID());
+    setError('');
+  }
+  function execute(e: FormEvent) {
+    e.preventDefault();
+    if (!runWorkflow) return;
+    void mutate(
+      () =>
+        request<{ run: Run }>(`/workflows/${runWorkflow.id}/runs`, {
+          method: 'POST',
+          headers: { 'idempotency-key': runKey },
+          body: JSON.stringify({ message }),
+        }),
+      (result) => {
+        setRunWorkflow(null);
+        void showRun(result.run.id);
+      },
+    );
+  }
+  const decision = (run: Run, d: 'approve' | 'reject') =>
+    mutate(
+      () =>
+        request<Run>(`/runs/${run.id}/decision`, {
+          method: 'POST',
+          body: JSON.stringify({ decision: d }),
+        }),
+      (r) => {
+        setDetail(r);
+        setView('executions');
+      },
+    );
+  const retry = (run: Run) =>
+    mutate(
+      () => request<Run>(`/runs/${run.id}/retry`, { method: 'POST' }),
+      (r) => {
+        setDetail(r);
+        setNotice('Recovery queued. The same execution identity is preserved.');
+      },
+    );
+  const operator = user?.role === 'OPERATOR';
+  const total = dashboard ? Object.values(dashboard.counts).reduce((a, b) => a + b, 0) : 0;
+  const visibleRuns = filter === 'ALL' ? runs : runs.filter((r) => r.status === filter);
+  const title = detail
+    ? 'Execution detail'
+    : view === 'editor'
+      ? edit
+        ? 'Edit workflow'
+        : 'Create workflow'
+      : view.charAt(0).toUpperCase() + view.slice(1);
+  if (booting)
+    return (
+      <main className="boot" role="status">
+        Connecting to operations console…
+      </main>
+    );
+  if (!user)
+    return (
+      <main className="login-layout">
+        <section className="login-story">
+          <div className="brand">
+            <span className="brand-mark">O</span>
+            <span>OPS / CONTROL</span>
+          </div>
+          <div>
+            <p className="eyebrow">FULL-STACK OPERATIONS CONSOLE</p>
+            <h1>
+              Every workflow.
+              <br />A visible outcome.
+            </h1>
+            <p className="story-copy">
+              Create workflows, control approvals, and trace each execution from request to
+              recovery.
+            </p>
+            <div className="story-chain">
+              <span>Configure</span>
+              <span>Approve</span>
+              <span>Execute</span>
+              <span>Inspect</span>
+            </div>
+          </div>
+          <p className="muted">Next.js · Fastify · PostgreSQL</p>
+        </section>
+        <section className="login-card">
+          <p className="eyebrow">SANDBOX WORKSPACE</p>
+          <h2>Sign in to your console</h2>
+          <p className="muted">Use a locally seeded account to review the working system.</p>
+          <form onSubmit={login}>
+            <label>
+              Email
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="username"
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                minLength={12}
+                maxLength={128}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </label>
+            {error && (
+              <div role="alert" className="error">
+                {error}
+              </div>
+            )}
+            <button className="primary full" disabled={busy}>
+              {busy ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
+          <p className="login-foot">
+            Sandbox integration uses deterministic triage.
+            <br />
+            No live AI provider or client data is connected.
+          </p>
+        </section>
+      </main>
+    );
+  return (
+    <div className="shell">
+      <a className="skip" href="#main">
+        Skip to content
+      </a>
+      <aside className="sidebar">
+        <a
+          className="brand"
+          href="#dashboard"
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('dashboard');
+          }}
+        >
+          <span className="brand-mark">O</span>
+          <span>
+            OPS / CONTROL<small>Operations workspace</small>
+          </span>
+        </a>
+        <p className="nav-label">WORKSPACE</p>
+        <nav aria-label="Main navigation">
+          {(['dashboard', 'workflows', 'executions', 'approvals'] as const).map((v, i) => (
+            <button
+              key={v}
+              className={
+                view === v || (v === 'workflows' && view === 'editor')
+                  ? 'nav-item active'
+                  : 'nav-item'
+              }
+              onClick={() => navigate(v)}
+              aria-current={view === v ? 'page' : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                {['◫', '⌘', '↗', '✓'][i]}
+              </span>
+              {v.charAt(0).toUpperCase() + v.slice(1)}
+              {v === 'approvals' && !!dashboard?.counts.WAITING_APPROVAL && (
+                <span className="count" aria-hidden="true">
+                  {dashboard.counts.WAITING_APPROVAL}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-note">
+          <span className="live-dot" />
+          <strong>Sandbox environment</strong>
+          <p>Approval controls and fault injection are available for review.</p>
+        </div>
+        <div className="account">
+          <span className="avatar">{operator ? 'OP' : 'VW'}</span>
+          <div>
+            <strong>{operator ? 'Operator' : 'Viewer'}</strong>
+            <small>{user.email}</small>
+          </div>
+          <button onClick={logout} disabled={busy} title="Sign out" aria-label="Sign out">
+            ↪
+          </button>
+        </div>
+      </aside>
+      <div className="workspace">
+        <header className="topbar">
+          <span>
+            Workspace <b>/</b> {title}
+          </span>
+          <span className="connection">
+            <i />
+            {error ? 'Check connection' : 'API connected'}
+          </span>
+          <button className="mobile-signout text-button" onClick={logout} disabled={busy}>
+            Sign out
+          </button>
+        </header>
+        <main id="main" className="content">
+          <div className="page-heading">
+            <div>
+              <p className="eyebrow">WORKFLOW OPERATIONS</p>
+              <h1>{title}</h1>
+              <p className="muted">
+                {view === 'dashboard'
+                  ? 'Execution visibility, with a human in control.'
+                  : view === 'workflows'
+                    ? 'Reusable configurations. Versioned and validated.'
+                    : view === 'approvals'
+                      ? 'Review the input before any sandbox ticket is created.'
+                      : detail
+                        ? 'Inspect persisted input, attempts, and state changes.'
+                        : 'Trace outcomes and recover failed executions.'}
+              </p>
+            </div>
+            {view === 'dashboard' || view === 'workflows' ? (
+              <button className="primary" disabled={!operator || busy} onClick={() => openEditor()}>
+                + New workflow
+              </button>
+            ) : null}
+          </div>
+          {error && (
+            <div role="alert" className="error">
+              {error}
+              <button
+                className="text-button"
+                onClick={() => {
+                  setError('');
+                  void refresh().catch((e) => setError(e.message));
+                }}
+              >
+                Refresh data
+              </button>
+            </div>
+          )}
+          {notice && (
+            <div role="status" className="notice">
+              {notice}
+            </div>
+          )}
+          {loading && (
+            <p role="status" className="muted">
+              Loading workspace…
+            </p>
+          )}
+          {!operator && (
+            <div className="viewer-note">
+              Viewer access · You can inspect your records. Changes and approvals require an
+              operator.
+            </div>
+          )}
+          {view === 'dashboard' && !detail && (
+            <>
+              <div className="metrics">
+                {[
+                  {
+                    label: 'Active workflows',
+                    value: dashboard?.workflowCount ?? 0,
+                    note: 'Ready to run',
+                    class: 'mint',
+                  },
+                  {
+                    label: 'Executions',
+                    value: total,
+                    note: 'Persisted run records',
+                    class: 'blue',
+                  },
+                  {
+                    label: 'Awaiting approval',
+                    value: dashboard?.counts.WAITING_APPROVAL ?? 0,
+                    note: 'Human decision required',
+                    class: 'amber',
+                  },
+                  {
+                    label: 'Needs attention',
+                    value: dashboard?.counts.FAILED ?? 0,
+                    note: 'Failed executions',
+                    class: 'red',
+                  },
+                ].map((m) => (
+                  <section className={`metric ${m.class}`} key={m.label}>
+                    <span>{m.label}</span>
+                    <strong>{m.value}</strong>
+                    <small>{m.note}</small>
+                  </section>
+                ))}
+              </div>
+              <div className="dashboard-grid">
+                <section className="panel">
+                  <div className="panel-heading">
+                    <div>
+                      <h2>Recent executions</h2>
+                      <p>The latest activity in your workspace</p>
+                    </div>
+                    <button className="text-button" onClick={() => navigate('executions')}>
+                      View history ↗
+                    </button>
+                  </div>
+                  <RunList items={dashboard?.recent ?? []} showRun={showRun} />
+                </section>
+                <section className="panel execution-health">
+                  <div className="panel-heading">
+                    <div>
+                      <h2>Execution outcomes</h2>
+                      <p>Current state of saved runs</p>
+                    </div>
+                  </div>
+                  {dashboard &&
+                    (
+                      [
+                        'SUCCEEDED',
+                        'RUNNING',
+                        'QUEUED',
+                        'WAITING_APPROVAL',
+                        'FAILED',
+                        'REJECTED',
+                      ] as const
+                    ).map((s) => (
+                      <div className="outcome" key={s}>
+                        <Status status={s} />
+                        <strong>{dashboard.counts[s]}</strong>
+                        <div className="bar">
+                          <span
+                            className={s.toLowerCase()}
+                            style={{ width: `${total ? (100 * dashboard.counts[s]) / total : 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                </section>
+              </div>
+              <section className="control-banner">
+                <div className="banner-icon">✓</div>
+                <div>
+                  <h2>Approve first. Execute with context.</h2>
+                  <p>
+                    Each run retains its workflow version, input, and attempt history. Rejected
+                    requests never reach the sandbox integration.
+                  </p>
+                </div>
+                <button className="secondary" onClick={() => navigate('approvals')}>
+                  Review approvals ↗
+                </button>
+              </section>
+            </>
+          )}
+          {view === 'workflows' && !detail && (
+            <section className="panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>Workflow library</h2>
+                  <p>{workflows.length} available configurations</p>
+                </div>
+                <span className="subtle-tag">HTTP sandbox integration</span>
+              </div>
+              {!workflows.length ? (
+                <Empty
+                  title="Create your first workflow"
+                  text="Define the approval gate, timeout, and retry policy before execution."
+                />
+              ) : (
+                <div className="workflow-grid">
+                  {workflows.map((w) => (
+                    <article className="workflow-card" key={w.id}>
+                      <div className="workflow-card-top">
+                        <span className="workflow-icon">⌘</span>
+                        <span className="subtle-tag">v{w.version}</span>
+                      </div>
+                      <h3>{w.name}</h3>
+                      <p>{w.description || 'Sandbox ticket triage workflow'}</p>
+                      <div className="workflow-facts">
+                        <span>{w.requiresApproval ? 'Approval required' : 'Direct execution'}</span>
+                        <span>
+                          {w.maxAttempts} attempts · {w.timeoutMs} ms
+                        </span>
+                      </div>
+                      <small className="mode">{modeLabels[w.sandboxMode]}</small>
+                      <div className="card-actions">
+                        <button
+                          className="secondary"
+                          disabled={!operator || busy}
+                          onClick={() => openExecute(w)}
+                        >
+                          Run workflow ↗
+                        </button>
+                        <button
+                          className="text-button"
+                          disabled={!operator || busy}
+                          onClick={() => openEditor(w)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="text-button danger-text"
+                          disabled={!operator || busy}
+                          onClick={() =>
+                            void mutate(
+                              () => request(`/workflows/${w.id}`, { method: 'DELETE' }),
+                              () => setNotice('Workflow archived. Execution history is retained.'),
+                            )
+                          }
+                        >
+                          Archive
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+          {view === 'editor' && (
+            <section className="panel editor">
+              <form onSubmit={saveWorkflow}>
+                <div className="panel-heading">
+                  <div>
+                    <h2>{edit ? 'Update configuration' : 'Workflow configuration'}</h2>
+                    <p>Validated before saving. Applied to new runs only.</p>
+                  </div>
+                  <span className="subtle-tag">Sandbox ticket triage</span>
+                </div>
+                <label>
+                  Workflow name
+                  <input
+                    minLength={3}
+                    maxLength={80}
+                    required
+                    value={draft.name}
+                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                    placeholder="Support request triage"
+                  />
+                </label>
+                <label>
+                  Description
+                  <textarea
+                    maxLength={500}
+                    value={draft.description}
+                    onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                    placeholder="Classify support requests and create a sandbox ticket."
+                  />
+                </label>
+                <div className="form-grid">
+                  <label>
+                    Maximum attempts
+                    <input
+                      type="number"
+                      min={1}
+                      max={5}
+                      required
+                      value={draft.maxAttempts}
+                      onChange={(e) => setDraft({ ...draft, maxAttempts: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Timeout (milliseconds)
+                    <input
+                      type="number"
+                      min={100}
+                      max={10000}
+                      required
+                      value={draft.timeoutMs}
+                      onChange={(e) => setDraft({ ...draft, timeoutMs: Number(e.target.value) })}
+                    />
+                  </label>
+                </div>
+                <label>
+                  Sandbox behavior
+                  <select
+                    aria-label="Sandbox behavior"
+                    value={draft.sandboxMode}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        sandboxMode: e.target.value as WorkflowInput['sandboxMode'],
+                      })
+                    }
+                  >
+                    {Object.entries(modeLabels).map(([key, value]) => (
+                      <option key={key} value={key}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="check-label">
+                  <input
+                    type="checkbox"
+                    checked={draft.requiresApproval}
+                    onChange={(e) => setDraft({ ...draft, requiresApproval: e.target.checked })}
+                  />
+                  <span>
+                    <strong>Require human approval</strong>
+                    <small>
+                      The integration receives no request until you approve the execution.
+                    </small>
+                  </span>
+                </label>
+                <div className="form-actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => navigate('workflows')}
+                    disabled={busy}
+                  >
+                    Cancel
+                  </button>
+                  <button className="primary" disabled={busy || !operator}>
+                    {busy ? 'Saving…' : 'Save workflow'}
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
+          {view === 'executions' && !detail && (
+            <section className="panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>Execution history</h2>
+                  <p>Inspect saved runs and their attempt timeline</p>
+                </div>
+                <label className="filter">
+                  Status
+                  <select
+                    aria-label="Filter executions"
+                    value={filter}
+                    onChange={(e) => {
+                      setFilter(e.target.value);
+                      setPageCursor(null);
+                    }}
+                  >
+                    <option value="ALL">All states</option>
+                    {Object.entries(labels).map(([key, value]) => (
+                      <option key={key} value={key}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <RunList items={visibleRuns} showRun={showRun} />
+              {pageCursor && (
+                <button className="secondary load-more" onClick={() => setPageCursor(null)}>
+                  Newest executions
+                </button>
+              )}
+              {cursor && (
+                <button className="secondary load-more" onClick={() => setPageCursor(cursor)}>
+                  Older executions
+                </button>
+              )}
+            </section>
+          )}
+          {view === 'approvals' && !detail && (
+            <section className="panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>Pending decisions</h2>
+                  <p>Approve or reject before outbound execution</p>
+                </div>
+                <span className="subtle-tag">Human approval gate</span>
+              </div>
+              {!pendingRuns.length ? (
+                <Empty
+                  title="No pending approvals"
+                  text="New approval-gated executions will appear here."
+                />
+              ) : (
+                <div className="approval-list">
+                  {pendingRuns.map((r) => (
+                    <article className="approval-card" key={r.id}>
+                      <div>
+                        <Status status={r.status} />
+                        <h3>{r.workflowSnapshot.name}</h3>
+                        <p>{r.input.message}</p>
+                        <small>
+                          Requested {date(r.createdAt)} · Workflow v{r.workflowSnapshot.version}
+                        </small>
+                      </div>
+                      <div className="card-actions">
+                        <button
+                          className="primary"
+                          disabled={!operator || busy}
+                          onClick={() => void decision(r, 'approve')}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          className="secondary danger-text"
+                          disabled={!operator || busy}
+                          onClick={() => void decision(r, 'reject')}
+                        >
+                          Reject
+                        </button>
+                        <button className="text-button" onClick={() => void showRun(r.id)}>
+                          Inspect
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+              {approvalCursor && (
+                <button className="secondary load-more" onClick={() => setApprovalCursor(null)}>
+                  Newest approvals
+                </button>
+              )}
+              {pendingNext && (
+                <button
+                  className="secondary load-more"
+                  onClick={() => setApprovalCursor(pendingNext)}
+                >
+                  Older approvals
+                </button>
+              )}
+            </section>
+          )}
+          {detail && (
+            <>
+              <button
+                className="back-link"
+                onClick={() => {
+                  setDetail(null);
+                  setView('executions');
+                }}
+              >
+                ← Execution history
+              </button>
+              <section className="panel run-overview">
+                <div className="panel-heading">
+                  <div>
+                    <p className="eyebrow">{detail.id}</p>
+                    <h2>{detail.workflowSnapshot.name}</h2>
+                    <p>
+                      Workflow v{detail.workflowSnapshot.version} · Created {date(detail.createdAt)}
+                    </p>
+                  </div>
+                  <Status status={detail.status} />
+                </div>
+                <div className="run-meta">
+                  <span>
+                    <small>Attempts</small>
+                    <strong>{detail.attemptCount}</strong>
+                  </span>
+                  <span>
+                    <small>Recoveries</small>
+                    <strong>{detail.recoveryCount}</strong>
+                  </span>
+                  <span>
+                    <small>Timeout</small>
+                    <strong>{detail.workflowSnapshot.timeoutMs} ms</strong>
+                  </span>
+                  <span>
+                    <small>Approval gate</small>
+                    <strong>
+                      {detail.workflowSnapshot.requiresApproval ? 'Required' : 'Disabled'}
+                    </strong>
+                  </span>
+                </div>
+                {detail.status === 'WAITING_APPROVAL' && (
+                  <div className="approval-action">
+                    <p>
+                      The integration has received no request. Review the input before continuing.
+                    </p>
+                    <div>
+                      <button
+                        className="primary"
+                        disabled={!operator || busy}
+                        onClick={() => void decision(detail, 'approve')}
+                      >
+                        Approve execution
+                      </button>
+                      <button
+                        className="secondary danger-text"
+                        disabled={!operator || busy}
+                        onClick={() => void decision(detail, 'reject')}
+                      >
+                        Reject execution
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {detail.status === 'FAILED' && (
+                  <div className="failure-action">
+                    <div>
+                      <strong>{detail.errorCode}</strong>
+                      <p>{detail.errorMessage}</p>
+                    </div>
+                    <button
+                      className="secondary"
+                      disabled={!operator || busy || detail.recoveryCount >= 3}
+                      onClick={() => void retry(detail)}
+                    >
+                      Retry execution
+                    </button>
+                  </div>
+                )}
+                {detail.status === 'REJECTED' && (
+                  <div className="viewer-note">
+                    Execution rejected. No sandbox ticket was created.
+                  </div>
+                )}
+              </section>
+              <div className="detail-grid">
+                <section className="panel payload">
+                  <div className="panel-heading">
+                    <div>
+                      <h2>Execution payload</h2>
+                      <p>Persisted input and integration output</p>
+                    </div>
+                  </div>
+                  <h3>Input</h3>
+                  <pre>{JSON.stringify(detail.input, null, 2)}</pre>
+                  <h3>Output</h3>
+                  {detail.output ? (
+                    <pre data-testid="run-output">{JSON.stringify(detail.output, null, 2)}</pre>
+                  ) : (
+                    <p className="muted">No output has been committed.</p>
+                  )}
+                </section>
+                <section className="panel">
+                  <div className="panel-heading">
+                    <div>
+                      <h2>Attempt & event timeline</h2>
+                      <p>Read from the database, refreshed automatically</p>
+                    </div>
+                  </div>
+                  <div className="timeline">
+                    {detail.attempts?.map((a) => (
+                      <div className="attempt" key={a.id}>
+                        <span className="event-dot" />
+                        <div>
+                          <strong>
+                            Attempt {a.number} · {a.status.replaceAll('_', ' ')}
+                          </strong>
+                          <small>
+                            {date(a.startedAt)}
+                            {a.errorCode ? ` · ${a.errorCode}` : ''}
+                          </small>
+                        </div>
+                      </div>
+                    ))}
+                    {detail.events?.map((event) => (
+                      <div className="event" key={event.id}>
+                        <span className="event-dot" />
+                        <div>
+                          <strong>{event.type.replaceAll('_', ' ')}</strong>
+                          <small>{date(event.createdAt)}</small>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            </>
+          )}
+          <footer className="footer">
+            Sandbox demonstration · Deterministic triage provider · Persisted operational evidence
+          </footer>
+        </main>
+      </div>
+      {runWorkflow && (
+        <div className="modal-backdrop">
+          <section
+            className="panel modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="execute-title"
+          >
+            <form onSubmit={execute}>
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">NEW EXECUTION</p>
+                  <h2 id="execute-title">{runWorkflow.name}</h2>
+                </div>
+                <button
+                  type="button"
+                  className="text-button"
+                  aria-label="Close execution dialog"
+                  disabled={busy}
+                  onClick={() => setRunWorkflow(null)}
+                >
+                  ✕
+                </button>
+              </div>
+              <label>
+                Request message
+                <textarea
+                  autoFocus
+                  minLength={3}
+                  maxLength={2000}
+                  required
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="An urgent billing issue needs review…"
+                />
+              </label>
+              <p className="muted">
+                {runWorkflow.requiresApproval
+                  ? 'This request will wait for approval before execution.'
+                  : 'This workflow executes directly without approval.'}
+              </p>
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => setRunWorkflow(null)}
+                >
+                  Cancel
+                </button>
+                <button className="primary" disabled={busy}>
+                  {busy ? 'Submitting…' : 'Submit execution'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+function Empty({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="empty">
+      <span>⌘</span>
+      <h3>{title}</h3>
+      <p>{text}</p>
+    </div>
+  );
+}
+function RunList({ items, showRun }: { items: Run[]; showRun: (id: string) => Promise<void> }) {
+  return !items.length ? (
+    <Empty
+      title="No executions yet"
+      text="Run a workflow to start building an inspectable execution history."
+    />
+  ) : (
+    <div className="run-list">
+      <div className="run-list-header">
+        <span>Workflow / execution</span>
+        <span>State</span>
+        <span>Attempts</span>
+        <span>Created</span>
+      </div>
+      {items.map((r) => (
+        <button className="run-row" key={r.id} onClick={() => void showRun(r.id)}>
+          <span className="run-name">
+            <strong>{r.workflowSnapshot.name}</strong>
+            <small>
+              {r.id.slice(0, 8)} · v{r.workflowSnapshot.version}
+            </small>
+          </span>
+          <Status status={r.status} />
+          <span className="attempt-number">{r.attemptCount}</span>
+          <time dateTime={r.createdAt}>{date(r.createdAt)}</time>
+        </button>
+      ))}
+    </div>
+  );
+}

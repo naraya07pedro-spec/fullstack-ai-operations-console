@@ -1,0 +1,145 @@
+{
+  "inspectedAt": "2026-10-13T02:33:38.395709+00:00",
+  "runUrl": "https://github.com/naraya07pedro-spec/fullstack-ai-operations-console/actions/runs/38336697920",
+  "reviewedPrHead": "9a7a88f708455ef9050db84e99815c86b468f3c8",
+  "ciCheckoutCommit": "e20dc55cf673d78a0bb52589c2b59c3dcc9f9775",
+  "sourceTreeSha256": "64902bbd414e6d98f2fb6c70706fcbd4a8bae72db6ce1ed4a511047f9b8112ee",
+  "scope": "Inspected implementation CI. Subsequent documentation-only updates retain this exact application/tooling source inventory; the PR description links the final-head CI.",
+  "native": {
+    "status": "success",
+    "artifactUrl": "https://github.com/naraya07pedro-spec/fullstack-ai-operations-console/actions/runs/38336697920/artifacts/11784958323",
+    "artifactId": 11784958323,
+    "artifactSha256": "a689ec3feae54da2be99119eebe78cb42830da2d5c4af8fb894ee9aa07f2383a",
+    "artifactExpiresAt": "2026-10-27T02:26:55Z",
+    "tests": {
+      "passed": 58,
+      "failed": 0,
+      "skipped": 0
+    },
+    "browser": {
+      "startTime": "2026-10-13T02:25:43.329Z",
+      "duration": 71157.624,
+      "expected": 10,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "dependencyAudit": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "validatedSourceFiles": 59,
+    "validatedSelectedScreenshots": 16,
+    "videoPath": "test-results/console-complete-workflow--49c0c-thentic-states-and-recovery-desktop-chromium/video.webm",
+    "video": {
+      "programs": [],
+      "streams": [
+        {
+          "codec_name": "vp9",
+          "width": 1440,
+          "height": 1000
+        }
+      ],
+      "format": {
+        "duration": "13.480000"
+      }
+    }
+  },
+  "container": {
+    "status": "success",
+    "artifactUrl": "https://github.com/naraya07pedro-spec/fullstack-ai-operations-console/actions/runs/38336697920/artifacts/11785252630",
+    "artifactId": 11785252630,
+    "artifactSha256": "b3b7b10cfae2be8a077cdc9bb2e7dd8d34d50361ebd571350771aeceaa92c07b",
+    "artifactExpiresAt": "2026-10-27T02:26:53Z",
+    "smoke": {
+      "date": "2026-10-13T02:25:42.121Z",
+      "runtime": "Docker Compose / native PostgreSQL / compiled Node backend / standalone Next.js",
+      "outcomes": [
+        {
+          "name": "standalone frontend serves HTML and every referenced JS/CSS asset",
+          "status": "passed"
+        },
+        {
+          "name": "same-origin rewrite reaches API and rejects unauthenticated access",
+          "status": "passed"
+        },
+        {
+          "name": "compiled API authenticates with a persisted database session",
+          "status": "passed"
+        },
+        {
+          "name": "separate worker leaves an unapproved execution without attempts or output",
+          "status": "passed"
+        },
+        {
+          "name": "duplicate request retains one execution identity across the container API",
+          "status": "passed"
+        },
+        {
+          "name": "approval runs real HTTP and persists ticket, attempt and events",
+          "status": "passed"
+        },
+        {
+          "name": "rejection stays terminal with zero attempts and recovery denied",
+          "status": "passed"
+        },
+        {
+          "name": "real HTTP 503 exhausts the configured two attempts",
+          "status": "passed"
+        },
+        {
+          "name": "manual recovery retains the run ID and persists success on total attempt three",
+          "status": "passed"
+        },
+        {
+          "name": "viewer mutation and cross-owner execution access are denied",
+          "status": "passed"
+        }
+      ]
+    },
+    "browser": {
+      "startTime": "2026-10-13T02:26:06.161Z",
+      "duration": 46952.375,
+      "expected": 10,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "services": {
+      "postgres": "healthy",
+      "bootstrap": "exited 0",
+      "api": "healthy",
+      "worker": "healthy",
+      "sandbox": "healthy",
+      "web": "healthy",
+      "hostPublishedPorts": ["127.0.0.1:3000"]
+    },
+    "videoPath": "test-results/console-complete-workflow--49c0c-thentic-states-and-recovery-desktop-chromium/video.webm",
+    "video": {
+      "programs": [],
+      "streams": [
+        {
+          "codec_name": "vp9",
+          "width": 1440,
+          "height": 1000
+        }
+      ],
+      "format": {
+        "duration": "13.840000"
+      }
+    }
+  },
+  "inspection": {
+    "downloadedZipDigestsMatched": true,
+    "packagedSourceAndScreenshotHashesMatched": true,
+    "reportsParsedAndAsserted": true,
+    "videosInspectedWithFfprobe": true,
+    "actualFramesVisuallyInspected": true
+  },
+  "productionMerge": false,
+  "productionDeployment": false
+}

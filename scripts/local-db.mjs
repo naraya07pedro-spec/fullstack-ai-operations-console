@@ -1,0 +1,20 @@
+import { PGlite } from '@electric-sql/pglite';
+import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
+import { mkdir } from 'node:fs/promises';
+const port = Number(process.env.LOCAL_DB_PORT ?? 5433),
+  directory = process.env.LOCAL_DB_DIR ?? `.local/postgres-${port}`;
+if (process.env.NODE_ENV === 'production')
+  throw new Error('PGlite is a development fallback, not a production server');
+await mkdir(directory, { recursive: true, mode: 0o700 });
+const db = await PGlite.create(directory);
+const server = new PGLiteSocketServer({ db, port, host: '127.0.0.1', maxConnections: 30 });
+await server.start();
+console.log(
+  `Local PostgreSQL WASM engine listening on 127.0.0.1:${port}. Development only; socket authentication is not enforced.`,
+);
+for (const signal of ['SIGINT', 'SIGTERM'])
+  process.on(signal, async () => {
+    await server.stop();
+    await db.close();
+    process.exit(0);
+  });
