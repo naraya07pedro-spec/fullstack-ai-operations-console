@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { evidenceSourcePaths } from './evidence-sources.mjs';
+import { format, resolveConfig } from 'prettier';
 const read = (p) => JSON.parse(readFileSync(p, 'utf8'));
 const unit = read('artifacts/test-results.json'),
   e2e = read('artifacts/e2e-results.json'),
@@ -75,7 +76,13 @@ const result = {
   sourceFiles,
   screenshots,
 };
-writeFileSync('docs/VERIFICATION.json', JSON.stringify(result, null, 2) + '\n');
+writeFileSync(
+  'docs/VERIFICATION.json',
+  await format(JSON.stringify(result), {
+    ...(await resolveConfig('docs/VERIFICATION.json')),
+    parser: 'json',
+  }),
+);
 console.log(
   JSON.stringify({
     tests: result.tests,

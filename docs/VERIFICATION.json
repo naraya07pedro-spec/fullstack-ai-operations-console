@@ -2,19 +2,12 @@
   "date": "2026-10-13T02:10:15.942Z",
   "scope": "Local executed proof. Native PostgreSQL results and exact CI commit are indexed separately in EVIDENCE.md.",
   "database": "PostgreSQL WASM / PGlite development fallback",
-  "tests": {
-    "passed": 57,
-    "failed": 0,
-    "nativeOnlySkipped": 1
-  },
+  "tests": { "passed": 57, "failed": 0, "nativeOnlySkipped": 1 },
   "browser": {
     "passed": 10,
     "failed": 0,
     "flaky": 0,
-    "projects": [
-      "desktop-chromium",
-      "mobile-chromium"
-    ]
+    "projects": ["desktop-chromium", "mobile-chromium"]
   },
   "coverage": {
     "scope": "Selected API/auth/config/engine/errors/sandbox and shared contract source; excludes frontend and process launchers",
@@ -23,15 +16,8 @@
     "functions": 96.42,
     "lines": 98.03
   },
-  "dependencyAudit": {
-    "info": 0,
-    "low": 0,
-    "moderate": 0,
-    "high": 0,
-    "critical": 0,
-    "total": 0
-  },
-  "sourceTreeSha256": "aa892e4b8c73e49b84b976724b31b1e9079ca4e0de62a5c858321b0c50823da0",
+  "dependencyAudit": { "info": 0, "low": 0, "moderate": 0, "high": 0, "critical": 0, "total": 0 },
+  "sourceTreeSha256": "53d1c731fc427a3c7915ed85b1f87be14a12758834fd2051ad8dce87a3358416",
   "sourceFiles": [
     {
       "path": ".dockerignore",
@@ -191,7 +177,7 @@
     },
     {
       "path": "scripts/container-smoke.mjs",
-      "sha256": "eb8254441c5a71256f8eb73f070b154c043845941de241faf5bf5a1774bcb16e"
+      "sha256": "5332df931fbf0614a85cd57b1c32c5c98e02e85ba79181fbe6ae36967063a1d4"
     },
     {
       "path": "scripts/dependency-audit.mjs",
@@ -231,7 +217,7 @@
     },
     {
       "path": "scripts/summarize-evidence.mjs",
-      "sha256": "e1d7e502361f8b596e9cc9a7ec18bd607b792a6bd151f327be0a19045e60845f"
+      "sha256": "2d559c10ea69ea19a32d5a66af1c8ce59f56adeaf75816a427d2349c5ac1a6e2"
     },
     {
       "path": "scripts/verify-local.mjs",

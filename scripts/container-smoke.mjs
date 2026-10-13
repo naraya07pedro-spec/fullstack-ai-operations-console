@@ -63,7 +63,7 @@ try {
   const page = await request('/');
   assert.equal(page.status, 200);
   const html = await page.text();
-  assert.match(html, /Sign in to your console/);
+  assert.match(html, /<title>Operations Console \| Workflow control<\/title>/);
   const assets = [
     ...new Set(
       [...html.matchAll(/(?:src|href)="([^"\s]+\.(?:js|css)(?:\?[^"\s]*)?)"/g)].map((m) => m[1]),
