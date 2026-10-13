@@ -4,6 +4,16 @@ An operations workspace for defining workflows, approving requests, executing an
 
 The integration is an explicit **deterministic sandbox** for support-request classification and synthetic ticket creation. There is no live LLM, customer data, or claimed business ROI. This project demonstrates the application and operational controls around a provider boundary.
 
+## Review in 60 seconds
+
+**See the running UI evidence first:** [portfolio showcase](https://evannaraya.netlify.app/#operations-console) · [authentic dashboard screenshot](https://github.com/naraya07pedro-spec/evan-naraya-portfolio/blob/main/assets/projects/operations-console/dashboard.png) · [recorded Docker workflow demo](https://github.com/naraya07pedro-spec/evan-naraya-portfolio/blob/main/assets/projects/operations-console/workflow-demo.mp4).
+
+**Follow an engineering decision:** [architecture](docs/ARCHITECTURE.md) → [versioned state and approval flow](docs/DECISIONS.md) → [failure-path tests](tests/integration/system.test.ts) → [known limitations](docs/KNOWN_LIMITATIONS.md).
+
+**Executed verification:** [final reviewed CI run](https://github.com/naraya07pedro-spec/fullstack-ai-operations-console/actions/runs/38337575725) at `654ce3b762f45a126ff844604daf0d830e54bf21`: 58 system checks; 10 native browser cases; 10 Docker browser cases; 10 Docker HTTP smoke checks. This is a specific tested revision, not a claim that all later revisions or a hosted application passed.
+
+![Authentic dashboard with synthetic test records](https://raw.githubusercontent.com/naraya07pedro-spec/evan-naraya-portfolio/main/assets/projects/operations-console/dashboard.png)
+
 ## Review
 
 [Evidence index](docs/EVIDENCE.md) · [Case study](docs/PORTFOLIO_CASE_STUDY.md) · [Architecture](docs/ARCHITECTURE.md) · [API](docs/API.md) · [Decisions](docs/DECISIONS.md) · [Container setup and release boundary](docs/DEPLOYMENT.md) · [Limitations](docs/KNOWN_LIMITATIONS.md)
