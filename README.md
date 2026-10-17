@@ -1,5 +1,9 @@
 # Full-Stack AI Operations Console
 
+[![CI - verify](https://github.com/naraya07pedro-spec/fullstack-ai-operations-console/actions/workflows/verify.yml/badge.svg)](https://github.com/naraya07pedro-spec/fullstack-ai-operations-console/actions/workflows/verify.yml)
+[![Node.js 22+](https://img.shields.io/badge/node.js-22%2B-green.svg)](https://nodejs.org/)
+[![TypeScript strict](https://img.shields.io/badge/typescript-strict-blue.svg)](https://www.typescriptlang.org/)
+
 An operations workspace for defining workflows, approving requests, executing an HTTP integration, and investigating failures. Next.js/React/TypeScript provide the interface; Fastify exposes the API; Prisma persists records in PostgreSQL; a separate worker owns execution.
 
 The integration is an explicit **deterministic sandbox** for support-request classification and synthetic ticket creation. There is no live LLM, customer data, or claimed business ROI. This project demonstrates the application and operational controls around a provider boundary.
@@ -17,6 +21,20 @@ The integration is an explicit **deterministic sandbox** for support-request cla
 ## Review
 
 [Evidence index](docs/EVIDENCE.md) · [Case study](docs/PORTFOLIO_CASE_STUDY.md) · [Architecture](docs/ARCHITECTURE.md) · [API](docs/API.md) · [Decisions](docs/DECISIONS.md) · [Container setup and release boundary](docs/DEPLOYMENT.md) · [Limitations](docs/KNOWN_LIMITATIONS.md)
+
+## System diagram
+
+```mermaid
+flowchart LR
+    U[Browser - Next.js UI] --> API[Fastify API]
+    API --> DB[(PostgreSQL via Prisma)]
+    API --> APP[Approve or reject before outbound HTTP]
+    APP --> EX[Execution request with idempotency key]
+    EX --> WK[Worker claims job on expiring lease]
+    WK --> SBX[Deterministic HTTP sandbox]
+    SBX --> WK
+    WK --> DB
+```
 
 ## Behavior
 
