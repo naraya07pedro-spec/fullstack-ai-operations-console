@@ -10,7 +10,7 @@ The integration is an explicit **deterministic sandbox** for support-request cla
 
 ## Review in 60 seconds
 
-**See the running UI evidence first:** [portfolio showcase](https://evannaraya.netlify.app/#operations-console) · [authentic dashboard screenshot](https://github.com/naraya07pedro-spec/evan-naraya-portfolio/blob/main/assets/projects/operations-console/dashboard.png) · [recorded Docker workflow demo](https://github.com/naraya07pedro-spec/evan-naraya-portfolio/blob/main/assets/projects/operations-console/workflow-demo.mp4).
+**See the running UI evidence first:** [portfolio showcase](https://evannaraya.com/#operations-console) · [authentic dashboard screenshot](https://github.com/naraya07pedro-spec/evan-naraya-portfolio/blob/main/assets/projects/operations-console/dashboard.png) · [recorded Docker workflow demo](https://github.com/naraya07pedro-spec/evan-naraya-portfolio/blob/main/assets/projects/operations-console/workflow-demo.mp4).
 
 **Follow an engineering decision:** [architecture](docs/ARCHITECTURE.md) → [versioned state and approval flow](docs/DECISIONS.md) → [failure-path tests](tests/integration/system.test.ts) → [known limitations](docs/KNOWN_LIMITATIONS.md).
 
