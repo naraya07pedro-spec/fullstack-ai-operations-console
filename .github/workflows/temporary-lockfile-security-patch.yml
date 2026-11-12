@@ -7,7 +7,7 @@ on:
       - security/next-16-4-3-patch-20261112
 jobs:
   generate-lockfile:
-    if: startsWith(github.event.head_commit.message, 'chore(security): generate patched lockfile')
+    if: "startsWith(github.event.head_commit.message, 'chore(security): generate patched lockfile')"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
