@@ -1,0 +1,28 @@
+name: Temporary exact Prettier output
+on:
+  push:
+    branches:
+      - hardening/console-disclosure-dependency-governance-20261113
+permissions:
+  contents: read
+jobs:
+  formatter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Format exact two files and show encoded output without writing repository
+        run: |
+          npx prettier --write SECURITY.md .github/dependabot.yml
+          echo 'BEGIN_SECURITY_B64'
+          base64 -w0 SECURITY.md
+          echo
+          echo 'END_SECURITY_B64'
+          echo 'BEGIN_DEPENDABOT_B64'
+          base64 -w0 .github/dependabot.yml
+          echo
+          echo 'END_DEPENDABOT_B64'
