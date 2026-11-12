@@ -1,0 +1,85 @@
+# Read-only dependency compatibility study; no commit, release, or permission escalation.
+name: Temporary minimatch 11 compatibility probe
+on:
+  push:
+    branches: [security/console-minimatch-11-probe-20261112]
+permissions:
+  contents: read
+jobs:
+  minimatch-probe:
+    if: "startsWith(github.event.head_commit.message, 'chore(security): probe minimatch 11 compatibility')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install baseline and capture ESLint file and diagnostic fingerprint
+        run: |
+          mkdir -p artifacts/minimatch-probe
+          npm ci --ignore-scripts --no-audit --no-fund
+          ./node_modules/.bin/eslint apps packages prisma tests scripts *.ts --format json > artifacts/minimatch-probe/lint-before.json
+          npm audit --json > artifacts/minimatch-probe/audit-before.json || true
+      - name: Resolve patched minimatch using npm 11, without bypassing dependency constraints
+        run: |
+          npm install -g npm@11 --ignore-scripts --no-audit --no-fund
+          npm --version
+          npm pkg set overrides.minimatch=11.0.7
+          npm install --ignore-scripts --no-audit --no-fund
+          git diff --check
+          git diff -- package.json package-lock.json > artifacts/minimatch-probe/candidate.patch
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const p=JSON.parse(readFileSync('package.json','utf8'));
+          const l=JSON.parse(readFileSync('package-lock.json','utf8'));
+          if(p.overrides.minimatch!=='11.0.7')throw Error('Missing exact minimatch override');
+          const entries=Object.entries(l.packages).filter(([k])=>k==='node_modules/minimatch'||k.endsWith('/node_modules/minimatch')).map(([path,v])=>({path,version:v.version}));
+          console.log(JSON.stringify({entries,override:p.overrides.minimatch}));
+          if(entries.length===0||entries.some(x=>x.version!=='11.0.7'))throw Error('Unpatched minimatch remains in lockfile');
+          NODE
+      - name: Reinstall, preserve lint file coverage and verify static behavior
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          ./node_modules/.bin/eslint apps packages prisma tests scripts *.ts --format json > artifacts/minimatch-probe/lint-after.json
+          node --input-type=module <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          const b=JSON.parse(readFileSync('artifacts/minimatch-probe/lint-before.json','utf8')),a=JSON.parse(readFileSync('artifacts/minimatch-probe/lint-after.json','utf8'));
+          const norm=xs=>xs.map(({filePath,errorCount,warningCount,messages})=>({filePath,errorCount,warningCount,messages:messages.map(({ruleId,severity,message,line,column})=>({ruleId,severity,message,line,column}))})).sort((x,y)=>x.filePath.localeCompare(y.filePath));
+          const before=norm(b),after=norm(a);
+          const same=JSON.stringify(before)===JSON.stringify(after);
+          writeFileSync('artifacts/minimatch-probe/lint-parity.json',JSON.stringify({same,fileCountBefore:before.length,fileCountAfter:after.length},null,2)+'\n');
+          if(!same)throw Error('Lint file selection or diagnostics changed; override is not proven compatible');
+          console.log(JSON.stringify({lintParity:same,fileCount:before.length}));
+          NODE
+          npm run db:generate
+          npm run format:check
+          npm run lint
+          npm run typecheck
+          npm run build:runtime
+          npm run security:secrets
+      - name: Enforce unchanged zero-advisory audit policy
+        run: |
+          npm audit --json > artifacts/minimatch-probe/audit-after.json
+          node --input-type=module <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          const before=JSON.parse(readFileSync('artifacts/minimatch-probe/audit-before.json','utf8'));
+          const after=JSON.parse(readFileSync('artifacts/minimatch-probe/audit-after.json','utf8'));
+          const summary={baselineSha:process.env.GITHUB_SHA,baseline:before.metadata?.vulnerabilities??null,candidate:after.metadata?.vulnerabilities??null,source:'npm audit registry response',readOnlyProbe:true};
+          writeFileSync('artifacts/minimatch-probe/summary.json',JSON.stringify(summary,null,2)+'\n');
+          console.log(JSON.stringify(summary));
+          if(!after.metadata?.vulnerabilities||after.metadata.vulnerabilities.total!==0)throw Error('Audit is not clean');
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: minimatch-11-compatibility-${{ github.sha }}
+          path: |
+            artifacts/minimatch-probe/*
+            package.json
+            package-lock.json
+          retention-days: 14
+          if-no-files-found: error
