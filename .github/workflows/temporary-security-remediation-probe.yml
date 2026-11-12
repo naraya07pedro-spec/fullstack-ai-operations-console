@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   probe:
-    if: "startsWith(github.event.head_commit.message, 'chore(security): run isolated dependency remediation probe')"
+    if: "startsWith(github.event.head_commit.message, 'chore(security): run targeted compatible dependency probe')"
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
@@ -26,11 +26,8 @@ jobs:
         run: |
           mkdir -p artifacts/security-probe
           npm audit --json > artifacts/security-probe/before.json || true
-          set +e
-          npm audit fix --ignore-scripts --no-fund > artifacts/security-probe/fix-output.txt 2>&1
-          status=$?
-          set -e
-          echo "npm audit fix exit code: $status"
+          npm install --save-exact --ignore-scripts --no-audit --no-fund fastify@5.12.8 > artifacts/security-probe/fix-output.txt 2>&1
+          npm install --save-exact --save-dev --ignore-scripts --no-audit --no-fund vitest@4.1.12 @vitest/coverage-v8@4.1.12 >> artifacts/security-probe/fix-output.txt 2>&1
           npm audit --json > artifacts/security-probe/after.json || true
           git diff --stat
           git diff --check
