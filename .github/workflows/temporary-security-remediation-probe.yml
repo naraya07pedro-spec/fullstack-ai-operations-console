@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   probe:
-    if: startsWith(github.event.head_commit.message, 'chore(security): run isolated dependency remediation probe')
+    if: "startsWith(github.event.head_commit.message, 'chore(security): run isolated dependency remediation probe')"
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
