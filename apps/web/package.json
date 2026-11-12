@@ -9,9 +9,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "16.4.0",
+    "@console/contracts": "*",
+    "next": "16.4.3",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "@console/contracts": "*"
+    "react-dom": "^19.2.0"
   }
 }
