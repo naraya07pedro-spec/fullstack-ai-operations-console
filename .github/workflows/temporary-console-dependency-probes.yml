@@ -1,0 +1,119 @@
+# Temporary branch-scoped dependency probe. No production publish, no pushes, and no security gate changes.
+name: Temporary console dependency patch probes
+on:
+  push:
+    branches: [security/console-dependency-probe-20261112]
+permissions:
+  contents: read
+jobs:
+  vitest:
+    if: "startsWith(github.event.head_commit.message, 'chore(security): start patch probes')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install baseline and npm 11
+        run: |
+          mkdir -p artifacts/patch-probe
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm install --global npm@11 --ignore-scripts --no-audit --no-fund
+          npm --version > artifacts/patch-probe/npm-version.txt
+      - name: Probe paired Vitest patches without unsafe flags
+        id: attempt
+        run: |
+          set +e
+          npm install --save-dev --save-exact --ignore-scripts --no-audit --no-fund vitest@4.1.12 @vitest/coverage-v8@4.1.12 > artifacts/patch-probe/install-log.txt 2>&1
+          status=$?
+          set -e
+          echo "$status" > artifacts/patch-probe/install-exit-code.txt
+          npm audit --json > artifacts/patch-probe/audit-after.json || true
+          git diff --check
+          git diff -- package.json package-lock.json > artifacts/patch-probe/candidate.patch
+          node --input-type=module <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          const m=JSON.parse(readFileSync('package.json','utf8')),l=JSON.parse(readFileSync('package-lock.json','utf8'));
+          const a=JSON.parse(readFileSync('artifacts/patch-probe/audit-after.json','utf8'));
+          const x={probe:'vitest',exitCode:Number(readFileSync('artifacts/patch-probe/install-exit-code.txt','utf8')),npmVersion:readFileSync('artifacts/patch-probe/npm-version.txt','utf8').trim(),requested:['vitest@4.1.12','@vitest/coverage-v8@4.1.12'],manifest:{vitest:m.devDependencies.vitest,coverage:m.devDependencies['@vitest/coverage-v8']},lock:{vitest:l.packages['node_modules/vitest']?.version,coverage:l.packages['node_modules/@vitest/coverage-v8']?.version,mocker:l.packages['node_modules/@vitest/mocker']?.version},advisories:a.metadata?.vulnerabilities||null};
+          writeFileSync('artifacts/patch-probe/summary.json',JSON.stringify(x,null,2)+'\n');console.log(JSON.stringify(x));
+          NODE
+          test "$status" -eq 0
+      - name: Validate generated install and static checks
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run db:generate
+          npm run format:check
+          npm run lint
+          npm run typecheck
+          npm run build:runtime
+          npm run security:secrets
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: console-vitest-probe-${{ github.sha }}
+          path: |
+            artifacts/patch-probe/*
+            package.json
+            package-lock.json
+          retention-days: 7
+          if-no-files-found: error
+  fasturi:
+    if: "startsWith(github.event.head_commit.message, 'chore(security): start patch probes')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install baseline and npm 11
+        run: |
+          mkdir -p artifacts/patch-probe
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm install --global npm@11 --ignore-scripts --no-audit --no-fund
+          npm --version > artifacts/patch-probe/npm-version.txt
+      - name: Probe compatible fast-uri dependency updates
+        id: attempt
+        run: |
+          set +e
+          npm update fast-uri --ignore-scripts --no-audit --no-fund > artifacts/patch-probe/install-log.txt 2>&1
+          status=$?
+          set -e
+          echo "$status" > artifacts/patch-probe/install-exit-code.txt
+          npm audit --json > artifacts/patch-probe/audit-after.json || true
+          git diff --check
+          git diff -- package.json package-lock.json > artifacts/patch-probe/candidate.patch
+          node --input-type=module <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          const l=JSON.parse(readFileSync('package-lock.json','utf8')),a=JSON.parse(readFileSync('artifacts/patch-probe/audit-after.json','utf8'));
+          const x={probe:'fast-uri',exitCode:Number(readFileSync('artifacts/patch-probe/install-exit-code.txt','utf8')),npmVersion:readFileSync('artifacts/patch-probe/npm-version.txt','utf8').trim(),lock:{fastUriRoot:l.packages['node_modules/fast-uri']?.version,fastUriAjv:l.packages['node_modules/ajv/node_modules/fast-uri']?.version},advisories:a.metadata?.vulnerabilities||null};
+          writeFileSync('artifacts/patch-probe/summary.json',JSON.stringify(x,null,2)+'\n');console.log(JSON.stringify(x));
+          NODE
+          test "$status" -eq 0
+      - name: Validate generated install and static checks
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run db:generate
+          npm run format:check
+          npm run lint
+          npm run typecheck
+          npm run build:runtime
+          npm run security:secrets
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: console-fasturi-probe-${{ github.sha }}
+          path: |
+            artifacts/patch-probe/*
+            package.json
+            package-lock.json
+          retention-days: 7
+          if-no-files-found: error
