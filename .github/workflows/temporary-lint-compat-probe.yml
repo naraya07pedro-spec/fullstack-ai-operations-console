@@ -1,0 +1,62 @@
+# Read-only trial of npm-audit-suggested toolchain versions. No downstream publishing.
+name: Temporary ESLint compatibility security probe
+on:
+  push:
+    branches: [security/console-lint-compat-probe-20261112]
+permissions:
+  contents: read
+jobs:
+  downgrade-compat:
+    if: "startsWith(github.event.head_commit.message, 'chore(security): probe npm audit lint compatibility')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Baseline install and npm 11
+        run: |
+          mkdir -p artifacts/lint-compat
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm install -g npm@11 --ignore-scripts --no-audit --no-fund
+          npm --version
+      - name: Probe audit-proposed toolchain without force
+        run: |
+          set +e
+          npm install --save-dev --save-exact --ignore-scripts --no-audit --no-fund eslint@9.39.5 @eslint/js@9.39.5 typescript-eslint@8.36.0 > artifacts/lint-compat/install.log 2>&1
+          status=$?
+          set -e
+          echo "$status" > artifacts/lint-compat/install.status
+          npm audit --json > artifacts/lint-compat/audit.json || true
+          git diff --check
+          git diff -- package.json package-lock.json > artifacts/lint-compat/candidate.patch
+          node --input-type=module <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          const p=JSON.parse(readFileSync('package.json','utf8')),l=JSON.parse(readFileSync('package-lock.json','utf8')),a=JSON.parse(readFileSync('artifacts/lint-compat/audit.json','utf8'));
+          const r={installExit:Number(readFileSync('artifacts/lint-compat/install.status','utf8')),manifest:{eslint:p.devDependencies.eslint,eslintJs:p.devDependencies['@eslint/js'],typescriptEslint:p.devDependencies['typescript-eslint']},lock:{minimatch:l.packages['node_modules/minimatch']?.version,eslint:l.packages['node_modules/eslint']?.version,typescriptEslint:l.packages['node_modules/typescript-eslint']?.version,fastUri:l.packages['node_modules/fast-uri']?.version,fastUriAjv:l.packages['node_modules/ajv/node_modules/fast-uri']?.version},advisories:a.metadata?.vulnerabilities??null};
+          writeFileSync('artifacts/lint-compat/summary.json',JSON.stringify(r,null,2)+'\n');console.log(JSON.stringify(r));
+          NODE
+          test "$status" -eq 0
+      - name: Validate clean install and static behavior
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run db:generate
+          npm run format:check
+          npm run lint
+          npm run typecheck
+          npm run build:runtime
+          npm run security:secrets
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: console-lint-compatibility-probe-${{ github.sha }}
+          path: |
+            artifacts/lint-compat/*
+            package.json
+            package-lock.json
+          retention-days: 7
+          if-no-files-found: error
