@@ -13,7 +13,7 @@ Please **do not publish exploit details, active credentials, private request pay
 1. If this repository has **Report a vulnerability** on its GitHub Security / Advisories page, submit a private vulnerability report there.
 2. If that feature is unavailable, email the maintainer at **evannarayahp@gmail.com** with the subject `Security report: fullstack-ai-operations-console`. This address is already publicly listed by the maintainer; do not attach secrets or customer data.
 
-For triage, include the affected commit SHA and version, relevant file or endpoint, expected versus observed behavior, and a minimal *synthetic-only*, non-destructive reproduction. State whether this affects authentication, authorization, CSRF/origin controls, approval boundaries, retry/lease recovery, secrets, dependency vulnerabilities, or the local container setup.
+For triage, include the affected commit SHA and version, relevant file or endpoint, expected versus observed behavior, and a minimal _synthetic-only_, non-destructive reproduction. State whether this affects authentication, authorization, CSRF/origin controls, approval boundaries, retry/lease recovery, secrets, dependency vulnerabilities, or the local container setup.
 
 A published `SECURITY.md` does **not** enable GitHub's private vulnerability reporting setting. Maintainer notification/response timelines, bounties, and coordinated release schedules are **not promised**.
 
