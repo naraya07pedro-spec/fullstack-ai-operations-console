@@ -1,8 +1,8 @@
 {
-  "date": "2026-10-13T02:10:15.942Z",
-  "scope": "Local executed proof. Native PostgreSQL results and exact CI commit are indexed separately in EVIDENCE.md.",
-  "database": "PostgreSQL WASM / PGlite development fallback",
-  "tests": { "passed": 57, "failed": 0, "nativeOnlySkipped": 1 },
+  "date": "2026-11-12T15:00:49.418Z",
+  "scope": "Executed GitHub Actions native PostgreSQL verification on 2026-11-12: run 43243009725, synthetic merge SHA 6956f90e36e61df6bd5ab12475da5bd298aa8c8d, artifact 13956706123. Native tests, browser tests, and dependency audit passed; the original overall system job failed the historical fingerprint check before this manifest was reconciled.",
+  "database": "PostgreSQL 16 native GitHub Actions service",
+  "tests": { "passed": 58, "failed": 0, "nativeOnlySkipped": 0 },
   "browser": {
     "passed": 10,
     "failed": 0,
@@ -17,7 +17,7 @@
     "lines": 98.03
   },
   "dependencyAudit": { "info": 0, "low": 0, "moderate": 0, "high": 0, "critical": 0, "total": 0 },
-  "sourceTreeSha256": "64902bbd414e6d98f2fb6c70706fcbd4a8bae72db6ce1ed4a511047f9b8112ee",
+  "sourceTreeSha256": "99fd810542957edbaaaa29344a58adcd00e97db5f3c2e51f41455ec57ded9c2f",
   "sourceFiles": [
     {
       "path": ".dockerignore",
@@ -101,7 +101,7 @@
     },
     {
       "path": "apps/web/package.json",
-      "sha256": "cd47198660886013e46d897f9efea37c79f8fb7b1b91d801c11ca2aca509d3ee"
+      "sha256": "9e85563d14e1026e3a5d088eb1a4a2d57b649145e4a0f9da00480c62b041ea12"
     },
     {
       "path": "apps/web/tsconfig.json",
@@ -117,11 +117,11 @@
     },
     {
       "path": "package-lock.json",
-      "sha256": "bae0643d00280a23aa342be788684f953c153e7c4edba5169264dc500df0d02a"
+      "sha256": "a07ef1233b908f1285bdc54463ac4771c94cf3012ce515fa512440e3f5b571b5"
     },
     {
       "path": "package.json",
-      "sha256": "14563ab870594b42d0865a86a89750e3d41d8fcded6e7a3a4fc28a3d2b2a59f4"
+      "sha256": "104ab64b69eaae3829288ba4b2ff0bf19d52d8f77f5398facb990b5e2b576a21"
     },
     {
       "path": "packages/contracts/package.json",
