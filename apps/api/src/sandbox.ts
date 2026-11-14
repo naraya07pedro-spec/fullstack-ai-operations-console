@@ -40,7 +40,9 @@ export async function buildSandbox(integrationToken: string) {
       return reply.code(400).send({ code: 'INVALID_INPUT' });
     requests++;
     requestCounts.set(key.data, (requestCounts.get(key.data) ?? 0) + 1);
-    const hash = digest(JSON.stringify(data.data.input)),
+    // The immutable request contract includes mode and retry policy. x-attempt
+    // is deliberately excluded: a legitimate retry changes attempt number.
+    const hash = digest(JSON.stringify(data.data)),
       previous = cache.get(key.data);
     if (previous) {
       if (previous.hash !== hash) return reply.code(409).send({ code: 'IDEMPOTENCY_CONFLICT' });
