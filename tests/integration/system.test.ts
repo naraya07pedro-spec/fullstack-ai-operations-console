@@ -643,6 +643,22 @@ describe('approval, reliability, and real HTTP sandbox integration', () => {
         })
       ).statusCode,
     ).toBe(409);
+    // The same key must never replay a result for a changed execution policy.
+    for (const changed of [
+      { ...payload, mode: 'slow' },
+      { ...payload, maxAttempts: 5 },
+    ]) {
+      expect(
+        (
+          await sandbox.app.inject({
+            method: 'POST',
+            url: '/tickets',
+            headers,
+            payload: changed,
+          })
+        ).statusCode,
+      ).toBe(409);
+    }
     expect(
       (
         await sandbox.app.inject({
@@ -673,6 +689,30 @@ describe('approval, reliability, and real HTTP sandbox integration', () => {
     ]);
     const values = await Promise.all(replies.map((r) => r.json()));
     expect(values[0]).toEqual(values[1]);
+    expect(sandbox.stats(id)).toEqual({ requests: 2, tickets: 1 });
+  });
+  it('rejects an in-flight request that reuses a key with changed sandbox policy', async () => {
+    const id = crypto.randomUUID(),
+      headers = {
+        'content-type': 'application/json',
+        authorization: `Bearer ${process.env.SANDBOX_TOKEN}`,
+        'idempotency-key': id,
+        'x-attempt': '1',
+      },
+      input = { message: 'In-flight policy identity' },
+      original = JSON.stringify({ input, mode: 'slow', maxAttempts: 3 });
+    const pending = fetch(`${sandboxUrl}/tickets`, { method: 'POST', headers, body: original });
+    await waitFor(async () => sandbox.stats(id).requests, (count) => count === 1);
+    const conflict = await fetch(`${sandboxUrl}/tickets`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ input, mode: 'success', maxAttempts: 3 }),
+    });
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toEqual({ code: 'IDEMPOTENCY_CONFLICT' });
+    const accepted = await pending;
+    expect(accepted.status).toBe(200);
+    expect((await accepted.json()).ticketId).toBe(`sbx_${id.slice(0, 12)}`);
     expect(sandbox.stats(id)).toEqual({ requests: 2, tickets: 1 });
   });
   it.each(['invalid-json', 'invalid-schema', 'oversized', 'redirect'])(
