@@ -30,6 +30,7 @@ jobs:
       SANDBOX_URL: http://127.0.0.1:4100
       ALLOW_TEST_DB_RESET: '1'
       NEXT_TELEMETRY_DISABLED: '1'
+      EVIDENCE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -52,6 +53,8 @@ jobs:
       - run: npm run test:e2e
       - run: npm run security:secrets
       - run: npm run security:audit
+      - name: Generate exact-checkout evidence from this CI execution
+        run: npm run evidence:summary
       - run: npm run evidence:check
       - name: Package reviewed source for release preparation
         run: git archive --format=tar.gz --output=artifacts/reviewed-source.tar.gz HEAD

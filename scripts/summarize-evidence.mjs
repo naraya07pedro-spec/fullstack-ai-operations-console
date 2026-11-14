@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { evidenceSourcePaths } from './evidence-sources.mjs';
 import { format, resolveConfig } from 'prettier';
 const read = (p) => JSON.parse(readFileSync(p, 'utf8'));
@@ -10,6 +11,7 @@ const unit = read('artifacts/test-results.json'),
 if (
   unit.numFailedTests ||
   !unit.success ||
+  (process.env.GITHUB_ACTIONS === 'true' && unit.numPendingTests) ||
   e2e.stats.unexpected ||
   e2e.stats.flaky ||
   e2e.stats.skipped ||
@@ -34,6 +36,8 @@ for (const path of [...new Set(candidates)]) {
     throw new Error(`Test report predates changed source: ${path}`);
 }
 const sourceFiles = candidates.map((path) => ({ path, sha256: sha(readFileSync(path)) }));
+const checkoutSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+const nativeCI = process.env.GITHUB_ACTIONS === 'true';
 const screenshots = readdirSync('docs/screenshots')
   .filter((n) => n.endsWith('.png'))
   .sort()
@@ -49,9 +53,18 @@ const screenshots = readdirSync('docs/screenshots')
   });
 const result = {
   date: new Date(unit.startTime).toISOString(),
-  scope:
-    'Local executed proof. Native PostgreSQL results and exact CI commit are indexed separately in EVIDENCE.md.',
-  database: 'PostgreSQL WASM / PGlite development fallback',
+  scope: nativeCI
+    ? 'Executed GitHub Actions system-job tests, native PostgreSQL, browser and audit proof; no live production claims.'
+    : 'Local executed tests and synthetic browser proof; consult environment and skip counts.',
+  database: nativeCI
+    ? 'PostgreSQL 16 native GitHub Actions service'
+    : 'Local development database; inspect runtime configuration and test skips',
+  provenance: {
+    testedCheckoutSha: checkoutSha,
+    reviewedSourceSha: process.env.EVIDENCE_SOURCE_SHA ?? checkoutSha,
+    githubRunId: process.env.GITHUB_RUN_ID ?? null,
+    environment: nativeCI ? 'github_actions' : 'local',
+  },
   tests: {
     passed: unit.numPassedTests,
     failed: unit.numFailedTests,
@@ -77,7 +90,7 @@ const result = {
   screenshots,
 };
 writeFileSync(
-  'docs/VERIFICATION.json',
+  'artifacts/verification-current.json',
   await format(JSON.stringify(result), {
     ...(await resolveConfig('docs/VERIFICATION.json')),
     parser: 'json',

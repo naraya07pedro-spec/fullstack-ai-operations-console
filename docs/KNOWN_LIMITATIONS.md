@@ -3,7 +3,7 @@
 ## Scope
 
 - Keyword-based deterministic classification and synthetic tickets. No live LLM, quality/cost evaluation, provider failover, customer delivery, ROI, or traffic claims.
-- Sandbox ticket/in-flight deduplication is process-local. No general exactly-once guarantee or persistence across sandbox restarts.
+- Sandbox ticket/in-flight deduplication is process-local. Its request fingerprint binds input, sandbox mode and max-attempt policy while deliberately ignoring changing attempt headers; mismatched contracts with the same event key fail closed. No general exactly-once guarantee or persistence across sandbox restarts.
 - Per-user ownership only. No shared organizations, SSO/MFA, password reset, invitations, production account administration, or separation-of-duties approval. Operators may approve their own runs.
 - Demo seed is disabled in production. Session cleanup, global throttling across replicas, and central security monitoring are future work.
 
