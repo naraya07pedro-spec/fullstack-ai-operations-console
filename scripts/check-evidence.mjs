@@ -1,6 +1,7 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { evidenceSourcePaths } from './evidence-sources.mjs';
 const sha = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
 const documents = [
@@ -21,7 +22,28 @@ for (const document of documents) {
     links++;
   }
 }
-const report = JSON.parse(readFileSync('docs/VERIFICATION.json', 'utf8'));
+const currentManifest = 'artifacts/verification-current.json';
+if (!existsSync(currentManifest))
+  throw new Error('Current evidence is absent: rerun tests, browser and audit, then evidence:summary');
+const report = JSON.parse(readFileSync(currentManifest, 'utf8'));
+const checkoutSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+if (report.provenance?.testedCheckoutSha !== checkoutSha)
+  throw new Error('Evidence checkout SHA differs from the source currently under review');
+if (
+  process.env.EVIDENCE_SOURCE_SHA &&
+  report.provenance?.reviewedSourceSha !== process.env.EVIDENCE_SOURCE_SHA
+)
+  throw new Error('Evidence PR head SHA differs from the requested source');
+if (
+  process.env.GITHUB_ACTIONS === 'true' &&
+  (report.provenance?.environment !== 'github_actions' || report.tests.nativeOnlySkipped)
+)
+  throw new Error('Native CI evidence is missing or contains skipped tests');
+const expectedSourceTree = createHash('sha256')
+  .update(JSON.stringify(report.sourceFiles))
+  .digest('hex');
+if (report.sourceTreeSha256 !== expectedSourceTree)
+  throw new Error('Evidence source inventory checksum is invalid');
 if (
   JSON.stringify(report.sourceFiles.map((file) => file.path)) !==
   JSON.stringify(evidenceSourcePaths())
