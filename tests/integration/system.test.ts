@@ -644,10 +644,7 @@ describe('approval, reliability, and real HTTP sandbox integration', () => {
       ).statusCode,
     ).toBe(409);
     // The same key must never replay a result for a changed execution policy.
-    for (const changed of [
-      { ...payload, mode: 'slow' },
-      { ...payload, maxAttempts: 5 },
-    ]) {
+    for (const changed of [{ ...payload, mode: 'slow' }, { ...payload, maxAttempts: 5 }]) {
       expect(
         (
           await sandbox.app.inject({
