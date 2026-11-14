@@ -24,7 +24,7 @@ for (const document of documents) {
 }
 const currentManifest = 'artifacts/verification-current.json';
 if (!existsSync(currentManifest))
-  throw new Error('Current evidence is absent: rerun tests, browser and audit, then evidence:summary');
+  throw new Error('Current proof missing: run tests, browser, audit and evidence:summary');
 const report = JSON.parse(readFileSync(currentManifest, 'utf8'));
 const checkoutSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 if (report.provenance?.testedCheckoutSha !== checkoutSha)
